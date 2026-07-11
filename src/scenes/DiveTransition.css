@@ -1,0 +1,25 @@
+.dive-root {
+  position: fixed;
+  inset: 0;
+  background: #000;
+}
+
+.dive-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.dive-text {
+  position: absolute;
+  bottom: 15%;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--font-cinematic);
+  font-size: 0.75rem;
+  letter-spacing: 0.5em;
+  text-transform: uppercase;
+  color: rgba(144, 224, 239, 0.7);
+  pointer-events: none;
+}

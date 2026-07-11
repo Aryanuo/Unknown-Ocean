@@ -1,0 +1,202 @@
+.hud-root {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* Coordinates panel */
+.hud-coords {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  padding: 14px 18px;
+  min-width: 170px;
+  pointer-events: none;
+}
+
+.hud-coords-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.3em;
+  color: var(--ui-text-dim);
+  margin-bottom: 10px;
+}
+
+.hud-coords-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+  font-size: 11px;
+  color: var(--ui-text-dim);
+}
+
+.hud-coord-val {
+  color: var(--ocean-glow);
+  font-size: 12px;
+}
+
+.hud-depth-bar {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.hud-depth-label {
+  font-size: 9px;
+  letter-spacing: 0.3em;
+  color: var(--ui-text-dim);
+}
+
+.hud-depth-value {
+  font-size: 13px;
+  color: var(--ocean-glow);
+  font-weight: 400;
+}
+
+.hud-depth-track {
+  width: 100%;
+  height: 3px;
+  background: rgba(0, 180, 216, 0.12);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.hud-depth-fill {
+  width: 100%;
+  background: linear-gradient(90deg, var(--ocean-glow-dim), var(--ocean-glow));
+  border-radius: 2px;
+  transition: height 0.5s ease;
+  transform: rotate(90deg);
+  transform-origin: 0 0;
+}
+
+/* Env panel */
+.hud-env {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  padding: 14px 18px;
+  min-width: 150px;
+  pointer-events: none;
+}
+
+.hud-env-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.hud-env-row:last-child { margin-bottom: 0; }
+
+.hud-env-label {
+  font-size: 9px;
+  letter-spacing: 0.3em;
+  color: var(--ui-text-dim);
+}
+
+.hud-env-val {
+  font-size: 12px;
+  color: var(--ui-text);
+}
+
+/* Biome banner */
+.hud-biome-banner {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  animation: float-up 0.6s ease both, fadeout 1.4s ease 1s both;
+  pointer-events: none;
+}
+
+@keyframes fadeout {
+  to { opacity: 0; transform: translate(-50%, -60%); }
+}
+
+.hud-biome-name {
+  font-size: clamp(1.4rem, 3vw, 2rem);
+  color: var(--ocean-cold);
+  text-shadow: 0 0 40px rgba(144,224,239,0.5);
+  margin-bottom: 8px;
+}
+
+.hud-biome-desc {
+  font-size: 0.8rem;
+  color: var(--ui-text-dim);
+  max-width: 380px;
+  line-height: 1.6;
+  font-weight: 300;
+}
+
+/* Nav */
+.hud-nav {
+  position: absolute;
+  bottom: 36px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--ui-glass);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--ui-border);
+  border-radius: 40px;
+  pointer-events: all;
+}
+
+.hud-nav-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 8px 16px;
+  border-radius: 30px;
+  transition: all var(--transition-mid);
+  color: var(--ui-text-dim);
+}
+
+.hud-nav-btn:hover {
+  background: var(--ui-glass-light);
+  color: var(--ui-text);
+}
+
+.hud-nav-icon { font-size: 1.1rem; }
+.hud-nav-label {
+  font-size: 9px;
+  letter-spacing: 0.15em;
+  font-family: var(--font-mono);
+}
+
+/* Controls */
+.hud-controls {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 9px;
+  color: rgba(202,240,248,0.25);
+  letter-spacing: 0.1em;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* Speed gauge */
+.hud-speed-track {
+  width: 100%;
+  height: 3px;
+  background: rgba(0, 180, 216, 0.12);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-top: 4px;
+}
+
+.hud-speed-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.12s linear, background 0.3s ease;
+}
