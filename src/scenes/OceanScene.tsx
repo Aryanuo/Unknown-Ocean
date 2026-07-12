@@ -15,6 +15,7 @@ import { Encyclopedia } from '../components/panels/Encyclopedia'
 import { PhotoMode } from '../components/panels/PhotoMode'
 import { CommunityStats } from '../components/panels/CommunityStats'
 import { Hero } from '../components/ocean3d/Hero'
+import { BubbleTrail } from '../components/ocean3d/BubbleTrail'
 import { Terrain3D } from '../components/ocean3d/Terrain3D'
 import { CreatureManager } from '../components/ocean3d/CreatureManager'
 import { UnderwaterAtmosphere } from '../components/ocean3d/UnderwaterAtmosphere'
@@ -95,6 +96,7 @@ function EnvironmentScene({ biome, depth, onDiscovery }: EnvSceneProps) {
       {depth < 120 && <Environment preset="city" />}
 
       <Hero />
+      <BubbleTrail />
       <Terrain3D />
       <CreatureManager onDiscovery={onDiscovery} />
       <UnderwaterAtmosphere depth={depth} />

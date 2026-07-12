@@ -2,64 +2,83 @@ import { useRef, useEffect, useMemo } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import {
   Vector3, Group, Quaternion, Euler, MathUtils,
-  MeshStandardMaterial, MeshPhysicalMaterial, Color, SpotLight, Object3D
+  MeshStandardMaterial, MeshPhysicalMaterial, Color, SpotLight, Object3D,
+  PointLight,
 } from 'three'
 import { usePlayerStore } from '../../store/usePlayerStore'
-import { BubbleTrail } from './BubbleTrail'
 
-// Shared speed ref so BubbleTrail can read it without prop drilling overhead
+// Shared speed ref so BubbleTrail / HUD can read it without prop drilling
 export const heroSpeedRef = { current: 0 }
+// World-space propeller position ref for BubbleTrail emitter
+export const heroPropWorldPos = { current: new Vector3() }
+// Velocity direction ref for BubbleTrail trail direction
+export const heroVelocityRef  = { current: new Vector3() }
 
-// ─── Pre-allocated reusables (no per-frame allocations) ──────────────────────
+// ─── Pre-allocated reusables (zero per-frame allocations) ────────────────────
 const _moveDir    = new Vector3()
 const _idealCamPos = new Vector3()
 const _lookTarget  = new Vector3()
-const _vel        = new Vector3()
 const _subPos     = new Vector3()
 const _q          = new Quaternion()
 const _euler      = new Euler()
-const _up         = new Vector3(0, 1, 0)
 const _forward    = new Vector3(0, 0, -1)
-const _bankAxis   = new Vector3(1, 0, 0)
+const _propWorld  = new Vector3()
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-const MAX_SPEED        = 32
-const ACCELERATION     = 55
-const DAMPING          = 0.88          // per-frame multiply (frame-rate corrected below)
-const TURN_SPEED       = 1.8           // rad/s
-const PITCH_SPEED      = 1.2
-const BANK_AMOUNT      = 0.38          // max roll radians while turning
-const BANK_SMOOTH      = 6            // lerp speed for banking
-const CAM3_OFFSET      = new Vector3(0, 12, 42)
-const CAM3_SMOOTH      = 5            // camera lerp speed (spring)
-const CAM3_LOOKAHEAD   = 14           // units ahead of sub the camera looks
-const CAM1_OFFSET      = new Vector3(0, 1.5, -1.5) // inside cockpit
+const MAX_SPEED        = 55          // significantly faster cruise
+const BOOST_MULT       = 1.75        // Shift multiplier
+const ACCELERATION     = 90          // very responsive
+const DAMPING          = 0.84        // per-frame (corrected below)
+const TURN_SPEED       = 2.2         // rad/s – snappier turns
+const PITCH_SPEED      = 1.6
+const BANK_AMOUNT      = 0.42
+const BANK_SMOOTH      = 7
+
+// Third-person camera
+const CAM3_OFFSET      = new Vector3(0, 10, 36)
+const CAM3_SMOOTH      = 6
+const CAM3_LOOKAHEAD   = 18
+
+// First-person: position well forward of the front dome (dome is at Z=-4.5, radius ~1.8)
+// Place camera at Z=-6.5 so it's in front of all hull geometry, looking forward
+const CAM1_OFFSET      = new Vector3(0, 0.4, -6.5)
+
 const FOV_BASE         = 62
-const FOV_BOOST        = 12           // extra FOV at max speed
-const STORE_SYNC_DIST  = 8            // update Zustand only when moved this far
+const FOV_BOOST        = 16
+const STORE_SYNC_DIST  = 6
 
 export function Hero() {
   const { coords, depth, setCoords, setDepth } = usePlayerStore()
   const { camera } = useThree()
 
-  // ── Refs (never trigger renders) ──────────────────────────────────────────
+  // ── Refs ──────────────────────────────────────────────────────────────────
   const groupRef   = useRef<Group>(null)
   const propRef    = useRef<Group>(null)
-  const spotRef    = useRef<SpotLight>(null)
+
+  // Two spotlights for left and right headlights
+  const spot1Ref   = useRef<SpotLight>(null)
+  const spot2Ref   = useRef<SpotLight>(null)
   const spotTarget = useRef<Object3D>(new Object3D())
 
+  // Point light for inner glow when headlights on
+  const headlightGlowRef = useRef<PointLight>(null)
+
   const velocity   = useRef(new Vector3())
-  const subYaw     = useRef(0)          // current heading in radians
+  const subYaw     = useRef(0)
   const subPitch   = useRef(0)
   const bankAngle  = useRef(0)
 
-  const camPos     = useRef(new Vector3(coords.x, -Math.max(10, depth), coords.y + 42))
+  const camPos     = useRef(new Vector3(coords.x, -Math.max(10, depth), coords.y + 36))
   const camMode    = useRef<'third' | 'first'>('third')
+  const headlights = useRef(true)
 
   const storePos   = useRef(new Vector3(coords.x, -Math.max(10, depth), coords.y))
   const keys       = useRef<Set<string>>(new Set())
 
-  // ── Input handling via refs (zero React re-renders) ───────────────────────
+  // Smooth camera pull-back accumulator
+  const camPullback = useRef(0)
+
+  // ── Input handling ────────────────────────────────────────────────────────
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
       keys.current.add(e.key.toLowerCase())
@@ -68,20 +87,24 @@ export function Hero() {
         camMode.current = camMode.current === 'third' ? 'first' : 'third'
         document.body.classList.toggle('cockpit-active', camMode.current === 'first')
       }
+      // Headlight toggle
+      if (e.key.toLowerCase() === 'f') {
+        headlights.current = !headlights.current
+      }
+      // Prevent page scroll on Space
+      if (e.key === ' ') e.preventDefault()
     }
-    const up   = (e: KeyboardEvent) => keys.current.delete(e.key.toLowerCase())
+    const up = (e: KeyboardEvent) => keys.current.delete(e.key.toLowerCase())
 
     window.addEventListener('keydown', down)
     window.addEventListener('keyup',   up)
 
-    // Set initial submarine position
     if (groupRef.current) {
       groupRef.current.position.set(coords.x, -Math.max(10, depth), coords.y)
     }
-    // Attach spotlight target to scene
     if (spotTarget.current && groupRef.current) {
       groupRef.current.add(spotTarget.current)
-      spotTarget.current.position.set(0, -3, -80)
+      spotTarget.current.position.set(0, -2, -120)
     }
 
     return () => {
@@ -93,93 +116,110 @@ export function Hero() {
   // ── Per-frame logic ───────────────────────────────────────────────────────
   useFrame((state, delta) => {
     if (!groupRef.current) return
-    const dt = Math.min(delta, 0.05) // clamp to avoid huge jumps
+    const dt = Math.min(delta, 0.05)
 
     const k = keys.current
 
-    // ── 1. Gather input ───────────────────────────────────────────────────
+    // ── 1. Input ─────────────────────────────────────────────────────────
     const fwd   = (k.has('w') || k.has('arrowup'))    ? 1 : 0
     const back  = (k.has('s') || k.has('arrowdown'))  ? 1 : 0
     const left  = (k.has('a') || k.has('arrowleft'))  ? 1 : 0
     const right = (k.has('d') || k.has('arrowright')) ? 1 : 0
-    const up    = (k.has('e'))                        ? 1 : 0
-    const dn    = (k.has('q'))                        ? 1 : 0
-    const boost = (k.has('shift'))                    ? 1.6 : 1.0
 
-    // ── 2. Update heading (yaw/pitch) ─────────────────────────────────────
-    const turnInput = right - left
-    const pitchInput = dn - up     // Q=dive, E=ascend → negative pitch = nose down
+    // Ascend: Space or E, Descend: Ctrl or Q
+    const ascend = (k.has(' ') || k.has('e'))                       ? 1 : 0
+    const descend= (k.has('control') || k.has('q'))                 ? 1 : 0
+
+    const boost  = (k.has('shift'))                                  ? BOOST_MULT : 1.0
+
+    // ── 2. Heading ───────────────────────────────────────────────────────
+    const turnInput  = right - left
+    const pitchInput = descend - ascend
 
     subYaw.current   -= turnInput   * TURN_SPEED  * dt
     subPitch.current += pitchInput  * PITCH_SPEED * dt
-    subPitch.current  = MathUtils.clamp(subPitch.current, -1.1, 1.1)
+    subPitch.current  = MathUtils.clamp(subPitch.current, -1.2, 1.2)
 
-    // ── 3. Compute movement direction from heading ────────────────────────
+    // ── 3. Movement direction ────────────────────────────────────────────
     _euler.set(subPitch.current, subYaw.current, 0, 'YXZ')
     _q.setFromEuler(_euler)
 
     _moveDir.set(0, 0, -(fwd - back))
     _moveDir.applyQuaternion(_q)
 
+    const maxSpd = MAX_SPEED * boost
     if (_moveDir.lengthSq() > 0) {
       velocity.current.addScaledVector(_moveDir, ACCELERATION * boost * dt)
     }
 
-    // ── 4. Damping (frame-rate independent) ───────────────────────────────
+    // ── 4. Damping (frame-rate independent) ──────────────────────────────
     const frameDamp = Math.pow(DAMPING, dt * 60)
     velocity.current.multiplyScalar(frameDamp)
 
-    // Clamp speed
     const spd = velocity.current.length()
-    if (spd > MAX_SPEED * boost) {
-      velocity.current.multiplyScalar((MAX_SPEED * boost) / spd)
+    if (spd > maxSpd) {
+      velocity.current.multiplyScalar(maxSpd / spd)
     }
 
-    // ── 5. Apply position ─────────────────────────────────────────────────
+    // ── 5. Position ──────────────────────────────────────────────────────
     groupRef.current.position.addScaledVector(velocity.current, dt)
     _subPos.copy(groupRef.current.position)
 
-    // Constrain: surface = Y=-10, max depth = -11000
+    // Depth clamp: surface = -10, max depth = -11000
     _subPos.y = MathUtils.clamp(_subPos.y, -11000, -10)
     groupRef.current.position.y = _subPos.y
 
-    // ── 6. Apply submarine rotation (yaw + pitch + bank) ──────────────────
-    const targetBank = -turnInput * BANK_AMOUNT * (spd / MAX_SPEED)
+    // ── 6. Rotation (yaw + pitch + bank) ─────────────────────────────────
+    const targetBank = -turnInput * BANK_AMOUNT * Math.min(spd / MAX_SPEED, 1)
     bankAngle.current = MathUtils.lerp(bankAngle.current, targetBank, BANK_SMOOTH * dt)
-
     _euler.set(subPitch.current, subYaw.current, bankAngle.current, 'YXZ')
     groupRef.current.quaternion.setFromEuler(_euler)
 
     // ── 7. Propeller spin ─────────────────────────────────────────────────
     if (propRef.current) {
-      propRef.current.rotation.z += spd * dt * 3.5
+      propRef.current.rotation.z += spd * dt * 5.0   // faster spin at speed
     }
-    heroSpeedRef.current = MathUtils.clamp(spd / MAX_SPEED, 0, 1)
 
-    // ── 8. Camera ─────────────────────────────────────────────────────────
     const speedFrac = MathUtils.clamp(spd / MAX_SPEED, 0, 1)
+    heroSpeedRef.current = speedFrac
+    heroVelocityRef.current.copy(velocity.current)
 
+    // World-space propeller position for BubbleTrail
+    _propWorld.set(0, 0, 4.8)
+    _propWorld.applyQuaternion(groupRef.current.quaternion)
+    _propWorld.add(_subPos)
+    heroPropWorldPos.current.copy(_propWorld)
+
+    // ── 8. Headlights ────────────────────────────────────────────────────
+    const hlIntensity = headlights.current ? 1 : 0
+    if (spot1Ref.current) spot1Ref.current.intensity  = MathUtils.lerp(spot1Ref.current.intensity, hlIntensity * 600, 8 * dt)
+    if (spot2Ref.current) spot2Ref.current.intensity  = MathUtils.lerp(spot2Ref.current.intensity, hlIntensity * 900, 8 * dt)
+    if (headlightGlowRef.current) headlightGlowRef.current.intensity = MathUtils.lerp(headlightGlowRef.current.intensity, hlIntensity * 40, 8 * dt)
+
+    // ── 9. Camera ─────────────────────────────────────────────────────────
     if (camMode.current === 'third') {
-      // Spring follow: offset is in world space, biased behind sub's yaw
-      const behindX = Math.sin(subYaw.current) * CAM3_OFFSET.z
-      const behindZ = Math.cos(subYaw.current) * CAM3_OFFSET.z
+      // Acceleration-based pull-back
+      const accelFrac = MathUtils.clamp((fwd - back) * boost, 0, 1)
+      camPullback.current = MathUtils.lerp(camPullback.current, accelFrac * 8, 3 * dt)
+      const pullZ = CAM3_OFFSET.z + camPullback.current
+
+      const behindX = Math.sin(subYaw.current) * pullZ
+      const behindZ = Math.cos(subYaw.current) * pullZ
       _idealCamPos.set(
         _subPos.x + behindX,
-        _subPos.y + CAM3_OFFSET.y,
+        _subPos.y + CAM3_OFFSET.y + subPitch.current * -4,
         _subPos.z + behindZ
       )
-      // Smooth follow
       camPos.current.lerp(_idealCamPos, MathUtils.clamp(CAM3_SMOOTH * dt, 0, 1))
       camera.position.copy(camPos.current)
 
-      // Look ahead in movement direction
       _lookTarget.copy(_subPos)
       _lookTarget.x -= Math.sin(subYaw.current) * CAM3_LOOKAHEAD
       _lookTarget.y += subPitch.current * 8
       _lookTarget.z -= Math.cos(subYaw.current) * CAM3_LOOKAHEAD
       camera.lookAt(_lookTarget)
 
-      // FOV breathing
+      // FOV breathing with speed
       ;(camera as any).fov = MathUtils.lerp(
         (camera as any).fov,
         FOV_BASE + speedFrac * FOV_BOOST,
@@ -188,23 +228,28 @@ export function Hero() {
       ;(camera as any).updateProjectionMatrix?.()
 
     } else {
-      // First-person cockpit view
+      // First-person: camera placed FORWARD of the front dome
       _idealCamPos.copy(CAM1_OFFSET).applyQuaternion(groupRef.current.quaternion).add(_subPos)
-      camera.position.lerp(_idealCamPos, Math.min(10 * dt, 1))
+      camera.position.lerp(_idealCamPos, Math.min(12 * dt, 1))
 
-      // Cockpit vibration
-      const vibAmt = speedFrac * 0.012
+      // Subtle cockpit vibration at speed
+      const vibAmt = speedFrac * 0.008
       camera.position.x += (Math.random() - 0.5) * vibAmt
       camera.position.y += (Math.random() - 0.5) * vibAmt
 
-      // Look forward from cockpit
-      _lookTarget.copy(_forward).applyQuaternion(groupRef.current.quaternion).multiplyScalar(30).add(_subPos)
+      // Look exactly forward from sub orientation
+      _lookTarget.copy(_forward)
+        .applyQuaternion(groupRef.current.quaternion)
+        .multiplyScalar(50)
+        .add(camera.position)
       camera.lookAt(_lookTarget)
-      ;(camera as any).fov = MathUtils.lerp((camera as any).fov, FOV_BASE - 5, 3 * dt)
+
+      // Slightly narrower FOV in first-person
+      ;(camera as any).fov = MathUtils.lerp((camera as any).fov, FOV_BASE - 4 + speedFrac * 6, 3 * dt)
       ;(camera as any).updateProjectionMatrix?.()
     }
 
-    // ── 9. Sync store (throttled) ─────────────────────────────────────────
+    // ── 10. Store sync (throttled, not every frame) ───────────────────────
     const dx = Math.abs(storePos.current.x - _subPos.x)
     const dy = Math.abs(storePos.current.y - _subPos.y)
     const dz = Math.abs(storePos.current.z - _subPos.z)
@@ -215,7 +260,7 @@ export function Hero() {
     }
   })
 
-  // ── Materials (memo — created once) ───────────────────────────────────────
+  // ── Materials (created once) ───────────────────────────────────────────────
   const hullMat = useMemo(() => new MeshStandardMaterial({
     color: new Color('#b71c1c'),
     roughness: 0.35,
@@ -272,31 +317,41 @@ export function Hero() {
 
   return (
     <group ref={groupRef}>
-      {/* ── Headlights ───────────────────────────────────────────────────── */}
+      {/* ── Dual Headlights ─────────────────────────────────────────────── */}
+      {/* Wide flood cone – fills the area with cool blue-white light */}
       <spotLight
-        ref={spotRef}
-        position={[0, 0.5, -4.5]}
-        angle={Math.PI / 5}
-        penumbra={0.4}
-        intensity={350}
-        distance={300}
-        color="#c8f0ff"
+        ref={spot1Ref}
+        position={[-0.8, 0.2, -4.8]}
+        angle={Math.PI / 5.5}
+        penumbra={0.35}
+        intensity={600}
+        distance={420}
+        color="#b8e8ff"
         target={spotTarget.current}
         castShadow={false}
       />
-      {/* Secondary narrower cone */}
+      {/* Right headlight – narrower, stronger center beam */}
       <spotLight
-        position={[0, 0.5, -4.5]}
-        angle={Math.PI / 10}
-        penumbra={0.2}
-        intensity={600}
-        distance={180}
+        ref={spot2Ref}
+        position={[0.8, 0.2, -4.8]}
+        angle={Math.PI / 8}
+        penumbra={0.18}
+        intensity={900}
+        distance={320}
         color="#ffffff"
         target={spotTarget.current}
         castShadow={false}
       />
+      {/* Headlight glow halo just in front of the dome */}
+      <pointLight
+        ref={headlightGlowRef}
+        position={[0, 0, -7]}
+        intensity={40}
+        distance={18}
+        color="#88ccff"
+      />
 
-      {/* ── Main hull (capsule along Z) ───────────────────────────────────── */}
+      {/* ── Main hull (capsule along Z) ────────────────────────────────── */}
       <mesh rotation={[Math.PI / 2, 0, 0]} castShadow>
         <capsuleGeometry args={[2.1, 7, 6, 20]} />
         <primitive object={hullMat} attach="material" />
@@ -308,45 +363,40 @@ export function Hero() {
         <primitive object={accentMat} attach="material" />
       </mesh>
 
-      {/* ── Conning tower / Sail ─────────────────────────────────────────── */}
+      {/* ── Conning tower / Sail ──────────────────────────────────────── */}
       <mesh position={[0, 2.6, 0.5]} castShadow>
         <boxGeometry args={[1.4, 2.2, 2.5]} />
         <primitive object={hullMat} attach="material" />
       </mesh>
-      {/* Tower top rounded edge */}
       <mesh position={[0, 3.7, 0.5]}>
         <cylinderGeometry args={[0.7, 0.7, 0.1, 16]} />
         <primitive object={darkHullMat} attach="material" />
       </mesh>
 
-      {/* ── Portholes ────────────────────────────────────────────────────── */}
+      {/* ── Portholes ─────────────────────────────────────────────────── */}
       {[-1.8, 0, 1.8].map((z, i) => (
         <group key={i}>
-          {/* Left porthole */}
           <mesh position={[-2.12, 0.4, z]} rotation={[0, Math.PI / 2, 0]}>
             <circleGeometry args={[0.38, 16]} />
             <primitive object={portholeMat} attach="material" />
           </mesh>
-          {/* Right porthole */}
           <mesh position={[2.12, 0.4, z]} rotation={[0, -Math.PI / 2, 0]}>
             <circleGeometry args={[0.38, 16]} />
             <primitive object={portholeMat} attach="material" />
           </mesh>
         </group>
       ))}
-      {/* Porthole point lights (warm glow) */}
-      <pointLight position={[-2.5, 0.4, 0]} intensity={18} distance={12} color="#ffb300" />
-      <pointLight position={[2.5, 0.4, 0]}  intensity={18} distance={12} color="#ffb300" />
+      <pointLight position={[-2.5, 0.4, 0]} intensity={22} distance={14} color="#ffb300" />
+      <pointLight position={[2.5, 0.4, 0]}  intensity={22} distance={14} color="#ffb300" />
 
-      {/* ── Front glass dome ─────────────────────────────────────────────── */}
+      {/* ── Front glass dome ──────────────────────────────────────────── */}
       <mesh position={[0, 0, -4.5]}>
         <sphereGeometry args={[1.8, 24, 24, 0, Math.PI * 2, 0, Math.PI / 2]} />
         <primitive object={glassMat} attach="material" />
       </mesh>
-      {/* Inner dome glow */}
-      <pointLight position={[0, 0, -3.5]} intensity={8} distance={6} color="#88ccff" />
+      <pointLight position={[0, 0, -3.5]} intensity={10} distance={8} color="#88ccff" />
 
-      {/* ── Side hydroplane fins ─────────────────────────────────────────── */}
+      {/* ── Side hydroplane fins ──────────────────────────────────────── */}
       <mesh position={[3.6, -0.3, 1.5]} rotation={[0, 0, -0.18]} castShadow>
         <boxGeometry args={[2.8, 0.22, 1.8]} />
         <primitive object={darkHullMat} attach="material" />
@@ -356,24 +406,21 @@ export function Hero() {
         <primitive object={darkHullMat} attach="material" />
       </mesh>
 
-      {/* ── Tail cross stabilizers ───────────────────────────────────────── */}
-      {/* Horizontal */}
+      {/* ── Tail stabilizers ─────────────────────────────────────────── */}
       <mesh position={[0, 0, 3.9]} castShadow>
         <boxGeometry args={[3.5, 0.22, 1.6]} />
         <primitive object={darkHullMat} attach="material" />
       </mesh>
-      {/* Vertical */}
       <mesh position={[0, 1.5, 3.9]} castShadow>
         <boxGeometry args={[0.22, 2.8, 1.6]} />
         <primitive object={darkHullMat} attach="material" />
       </mesh>
 
-      {/* ── Propeller hub ────────────────────────────────────────────────── */}
+      {/* ── Propeller hub ─────────────────────────────────────────────── */}
       <mesh position={[0, 0, 4.6]}>
         <cylinderGeometry args={[0.42, 0.42, 0.6, 16]} />
         <primitive object={metalMat} attach="material" />
       </mesh>
-      {/* Propeller blades (spinning group) */}
       <group position={[0, 0, 4.8]} ref={propRef}>
         {[0, 1, 2, 3].map((i) => (
           <mesh
@@ -387,13 +434,13 @@ export function Hero() {
         ))}
       </group>
 
-      {/* ── Sonar/sensor dome on hull underside ──────────────────────────── */}
+      {/* ── Sonar dome ────────────────────────────────────────────────── */}
       <mesh position={[0, -2.3, -1]}>
         <sphereGeometry args={[0.55, 12, 12]} />
         <primitive object={metalMat} attach="material" />
       </mesh>
 
-      {/* ── Running lights ───────────────────────────────────────────────── */}
+      {/* ── Running lights ────────────────────────────────────────────── */}
       <mesh position={[2.15, 0, -2]}>
         <sphereGeometry args={[0.16, 8, 8]} />
         <meshStandardMaterial color="#ff1744" emissive="#ff1744" emissiveIntensity={4} />
@@ -402,11 +449,10 @@ export function Hero() {
         <sphereGeometry args={[0.16, 8, 8]} />
         <meshStandardMaterial color="#00e676" emissive="#00e676" emissiveIntensity={4} />
       </mesh>
-      <pointLight position={[2.5, 0, -2]}  intensity={6} distance={8} color="#ff1744" />
-      <pointLight position={[-2.5, 0, -2]} intensity={6} distance={8} color="#00e676" />
+      <pointLight position={[2.5, 0, -2]}  intensity={8} distance={10} color="#ff1744" />
+      <pointLight position={[-2.5, 0, -2]} intensity={8} distance={10} color="#00e676" />
 
-      {/* Bubble trail attached to propeller position */}
-      <BubbleTrail speed={heroSpeedRef.current} />
+      {/* BubbleTrail is now rendered outside the group (world space) via OceanScene */}
     </group>
   )
 }

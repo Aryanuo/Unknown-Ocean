@@ -2,41 +2,51 @@ import { useRef, useMemo } from 'react'
 import { useFrame } from '@react-three/fiber'
 import {
   InstancedMesh, Object3D, SphereGeometry, MeshBasicMaterial,
-  Color, AdditiveBlending, MathUtils
+  Color, AdditiveBlending, MathUtils, Vector3,
 } from 'three'
+import { heroSpeedRef, heroPropWorldPos, heroVelocityRef } from './Hero'
 
+// ── Pre-allocated dummy object for instancing ────────────────────────────────
 const _dummy  = new Object3D()
-const BUBBLE_COUNT = 40
+const _emitPos = new Vector3()
 
-interface BubbleTrailProps {
-  speed: number // 0–1 normalised speed
+// ─────────────────────────────────────────────────────────────────────────────
+// Bubbles live entirely in WORLD space so they are left behind as the sub moves.
+// They are NOT children of the submarine group.
+// ─────────────────────────────────────────────────────────────────────────────
+const BUBBLE_COUNT = 80  // more bubbles for richer trail
+
+interface BubbleData {
+  wx: number; wy: number; wz: number   // world-space position
+  age: number; lifetime: number
+  driftX: number; driftY: number; driftZ: number
+  scale: number
+  active: boolean
 }
 
-export function BubbleTrail({ speed }: BubbleTrailProps) {
-  const meshRef = useRef<InstancedMesh>(null)
+export function BubbleTrail() {
+  const meshRef  = useRef<InstancedMesh>(null)
+  const emitAcc  = useRef(0)
+  // Emit multiple bubbles per interval for richer trail
+  const burstAcc = useRef(0)
 
-  const bubbleData = useMemo(() => Array.from({ length: BUBBLE_COUNT }, (_, i) => ({
-    // Local offset relative to sub (emitted behind propeller)
-    x: (Math.random() - 0.5) * 1.2,
-    y: (Math.random() - 0.5) * 0.8,
-    z: 0,                                    // will be set at "birth"
-    age:      Math.random() * 3,              // stagger initial ages
-    lifetime: 1.8 + Math.random() * 2.2,
-    driftX:   (Math.random() - 0.5) * 0.9,
-    driftY:   1.2 + Math.random() * 2.4,     // rise speed
-    driftZ:   0.4 + Math.random() * 1.8,     // trail behind sub
-    scale:    0.08 + Math.random() * 0.28,
-    active:   false,
-  })), [])
+  const bubbleData = useMemo<BubbleData[]>(() =>
+    Array.from({ length: BUBBLE_COUNT }, () => ({
+      wx: 0, wy: 0, wz: 0,
+      age: Math.random() * 3,
+      lifetime: 1.5 + Math.random() * 2.5,
+      driftX:  (Math.random() - 0.5) * 0.6,
+      driftY:   0.8 + Math.random() * 2.2,  // bubbles rise in world space
+      driftZ:  (Math.random() - 0.5) * 0.6,
+      scale:   0.06 + Math.random() * 0.22,
+      active:  false,
+    })), [])
 
-  // Cumulative time between emissions
-  const emitAcc = useRef(0)
-
-  const geo = useMemo(() => new SphereGeometry(1, 4, 4), [])
+  const geo = useMemo(() => new SphereGeometry(1, 5, 5), [])
   const mat = useMemo(() => new MeshBasicMaterial({
-    color: new Color('#c8f0ff'),
+    color: new Color('#c8f8ff'),
     transparent: true,
-    opacity: 0.55,
+    opacity: 0.6,
     depthWrite: false,
     blending: AdditiveBlending,
   }), [])
@@ -44,24 +54,45 @@ export function BubbleTrail({ speed }: BubbleTrailProps) {
   useFrame((_, delta) => {
     if (!meshRef.current) return
 
-    const emitInterval = MathUtils.lerp(0.8, 0.05, speed) // fast at high speed
+    const speed = heroSpeedRef.current
+    const propPos = heroPropWorldPos.current
+    const vel = heroVelocityRef.current
+
+    // ── Emission ─────────────────────────────────────────────────────────────
+    // Faster sub → more frequent emission; minimum interval at max speed ~0.02s
+    const emitInterval = MathUtils.lerp(0.35, 0.02, speed)
     emitAcc.current += delta
 
-    // Emit new bubbles
-    if (emitAcc.current > emitInterval && speed > 0.05) {
+    if (emitAcc.current > emitInterval && speed > 0.02) {
       emitAcc.current = 0
-      // Find an inactive bubble
-      const b = bubbleData.find(b => !b.active)
-      if (b) {
-        b.active = true
-        b.age    = 0
-        b.x      = (Math.random() - 0.5) * 1.2
-        b.y      = (Math.random() - 0.5) * 0.8
-        b.z      = 4.5 // propeller position (local Z)
+      // Emit 1–4 bubbles per burst depending on speed
+      const burstCount = Math.max(1, Math.floor(speed * 4))
+      let emitted = 0
+
+      for (let i = 0; i < BUBBLE_COUNT && emitted < burstCount; i++) {
+        const b = bubbleData[i]
+        if (!b.active) {
+          b.active   = true
+          b.age      = 0
+          b.lifetime = 1.5 + Math.random() * 2.5
+
+          // Emit at world-space propeller + random spread
+          _emitPos.copy(propPos)
+          b.wx = _emitPos.x + (Math.random() - 0.5) * 1.4
+          b.wy = _emitPos.y + (Math.random() - 0.5) * 1.0
+          b.wz = _emitPos.z + (Math.random() - 0.5) * 1.4
+
+          // Base drift is mostly upward; also carry some opposite velocity
+          b.driftX = (Math.random() - 0.5) * 0.8 - vel.x * 0.04
+          b.driftY =  0.8 + Math.random() * 2.0
+          b.driftZ = (Math.random() - 0.5) * 0.8 - vel.z * 0.04
+          b.scale  = (0.06 + Math.random() * 0.22) * (1 + speed * 0.5)
+          emitted++
+        }
       }
     }
 
-    // Update all bubbles
+    // ── Update all bubbles ────────────────────────────────────────────────────
     for (let i = 0; i < BUBBLE_COUNT; i++) {
       const b = bubbleData[i]
       if (!b.active) {
@@ -72,26 +103,37 @@ export function BubbleTrail({ speed }: BubbleTrailProps) {
       }
 
       b.age += delta
-      if (b.age > b.lifetime) { b.active = false; continue }
+      if (b.age > b.lifetime) {
+        b.active = false
+        _dummy.scale.setScalar(0)
+        _dummy.updateMatrix()
+        meshRef.current.setMatrixAt(i, _dummy.matrix)
+        continue
+      }
 
       const life = b.age / b.lifetime
-      b.x += b.driftX * delta * 0.2
-      b.y += b.driftY * delta
-      b.z += b.driftZ * delta
 
-      const s = b.scale * (1 + life * 0.5) // bubbles expand slightly
-      _dummy.position.set(b.x, b.y, b.z)
+      // Move in world space (independent of submarine position)
+      b.wx += b.driftX * delta
+      b.wy += b.driftY * delta
+      b.wz += b.driftZ * delta
+
+      // Bubbles expand and fade toward end of life
+      const s = b.scale * (1 + life * 0.6)
+      _dummy.position.set(b.wx, b.wy, b.wz)
       _dummy.scale.setScalar(s)
       _dummy.updateMatrix()
       meshRef.current.setMatrixAt(i, _dummy.matrix)
     }
 
     meshRef.current.instanceMatrix.needsUpdate = true
+
     // Fade opacity with speed
-    mat.opacity = 0.3 + speed * 0.45
+    mat.opacity = MathUtils.lerp(0.25, 0.75, speed)
   })
 
   return (
+    // frustumCulled=false so we never miss bubbles near camera edge
     <instancedMesh ref={meshRef} args={[geo, mat, BUBBLE_COUNT]} frustumCulled={false} />
   )
 }

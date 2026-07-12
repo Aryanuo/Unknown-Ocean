@@ -125,9 +125,15 @@ export function HUD({ onOpenLog, onOpenEncyclopedia, onOpenStats, onPhotoMode, c
         </button>
       </nav>
 
-      {/* Controls hint */}
-      <div className="hud-controls text-mono" id="hud-controls">
-        WASD · Move &nbsp;|&nbsp; Q/E · Depth &nbsp;|&nbsp; Shift · Boost &nbsp;|&nbsp; V · Camera
+      {/* Controls panel */}
+      <div className="hud-controls" id="hud-controls">
+        <div className="hud-controls-row"><kbd>W</kbd><kbd>S</kbd><span>Forward / Reverse</span></div>
+        <div className="hud-controls-row"><kbd>A</kbd><kbd>D</kbd><span>Turn Left / Right</span></div>
+        <div className="hud-controls-row"><kbd>Space</kbd><span>Ascend</span></div>
+        <div className="hud-controls-row"><kbd>Ctrl</kbd><span>Descend</span></div>
+        <div className="hud-controls-row"><kbd>Shift</kbd><span>Boost</span></div>
+        <div className="hud-controls-row"><kbd>V</kbd><span>Camera View</span></div>
+        <div className="hud-controls-row"><kbd>F</kbd><span>Headlights</span></div>
       </div>
     </div>
   )
