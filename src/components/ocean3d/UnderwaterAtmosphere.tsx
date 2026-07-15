@@ -1,4 +1,4 @@
-import { useRef, useMemo } from 'react'
+import React, { useRef, useMemo } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import {
   InstancedMesh, Object3D, MeshBasicMaterial, SphereGeometry,
@@ -81,11 +81,9 @@ const causticFrag = /* glsl */`
 const PARTICLE_COUNT = 220
 const RAY_COUNT      = 8
 
-interface AtmosphereProps {
-  depth: number   // current player depth in metres (positive number)
-}
 
-export function UnderwaterAtmosphere({ depth }: AtmosphereProps) {
+
+export const UnderwaterAtmosphere = React.memo(function UnderwaterAtmosphere() {
   const { camera } = useThree()
 
   // ── Particle instanced mesh ──────────────────────────────────────────────
@@ -134,13 +132,20 @@ export function UnderwaterAtmosphere({ depth }: AtmosphereProps) {
 
   // Stable positions for rays (offsets around camera)
   const rayOffsets = useMemo(() =>
-    Array.from({ length: RAY_COUNT }, (_, i) => ({
-      angle: (i / RAY_COUNT) * Math.PI * 2 + i * 0.4,
-      radius: 18 + (i % 3) * 12,
-      width:  2.5 + (i % 3) * 1.5,
-      height: 55  + (i % 4) * 20,
-      sway:   (i % 2 === 0 ? 1 : -1) * (0.3 + (i % 3) * 0.15),
-    })),
+    Array.from({ length: RAY_COUNT }, (_, i) => {
+      const angle = (i / RAY_COUNT) * Math.PI * 2 + i * 0.4
+      const radius = 18 + (i % 3) * 12
+      return {
+        angle,
+        radius,
+        width:  2.5 + (i % 3) * 1.5,
+        height: 55  + (i % 4) * 20,
+        sway:   (i % 2 === 0 ? 1 : -1) * (0.3 + (i % 3) * 0.15),
+        // Stable deterministic position offsets (was Math.random() — caused god rays to jump on re-render)
+        posX: Math.cos(angle) * radius + (((i * 7 + 3) % 10) / 10 - 0.5) * 5,
+        posZ: Math.sin(angle) * radius + (((i * 13 + 7) % 10) / 10 - 0.5) * 5,
+      }
+    }),
   [])
 
   // ── Caustic material ──────────────────────────────────────────────────────
@@ -263,11 +268,7 @@ export function UnderwaterAtmosphere({ depth }: AtmosphereProps) {
         <mesh
           key={`ray-${i}`}
           frustumCulled={false}
-          position={[
-            Math.cos(ro.angle) * ro.radius + (Math.random() - 0.5) * 5,
-            30,
-            Math.sin(ro.angle) * ro.radius + (Math.random() - 0.5) * 5,
-          ]}
+          position={[ro.posX, 30, ro.posZ]}
           rotation={[0, ro.angle + Math.PI / 2, ro.sway]}
           scale={[ro.width, ro.height, 1]}
         >
@@ -293,4 +294,4 @@ export function UnderwaterAtmosphere({ depth }: AtmosphereProps) {
       </points>
     </>
   )
-}
+})

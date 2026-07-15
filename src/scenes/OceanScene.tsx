@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { Environment } from '@react-three/drei'
 import { EffectComposer, Bloom, Vignette, ChromaticAberration } from '@react-three/postprocessing'
@@ -8,8 +8,8 @@ import { usePlayerStore, Discovery } from '../store/usePlayerStore'
 import { useWorldStore } from '../store/useWorldStore'
 import { getBiomeAt, BIOMES, BiomeType } from '../engine/procedural/biomeGenerator'
 import { HUD } from '../components/ui/HUD'
-import { DiscoveryAlert } from '../components/ui/DiscoveryAlert'
 import { DailyEventBanner } from '../components/ui/DailyEventBanner'
+import { ScanHUD, ScanState } from '../components/ui/ScanHUD'
 import { ResearchLog } from '../components/panels/ResearchLog'
 import { Encyclopedia } from '../components/panels/Encyclopedia'
 import { PhotoMode } from '../components/panels/PhotoMode'
@@ -28,11 +28,11 @@ const _targetFog = new Color()
 // ── Environment scene with smooth fog transitions ─────────────────────────────
 interface EnvSceneProps {
   biome: BiomeType
-  depth: number
+  onScanCreature: (id: string, speciesId: string, name: string, dna: any, wx: number, wy: number, wz: number) => void
   onDiscovery: (d: Discovery) => void
 }
 
-function EnvironmentScene({ biome, depth, onDiscovery }: EnvSceneProps) {
+const EnvironmentScene = React.memo(function EnvironmentScene({ biome, onScanCreature, onDiscovery }: EnvSceneProps) {
   const { scene } = useThree()
   const biomeConf = BIOMES[biome] || BIOMES.open
   const fogRef    = useRef<FogExp2 | null>(null)
@@ -45,93 +45,134 @@ function EnvironmentScene({ biome, depth, onDiscovery }: EnvSceneProps) {
     fogRef.current = fog
   }, []) // eslint-disable-line
 
-  useFrame((_, delta) => {
+  useFrame((state, delta) => {
     if (!fogRef.current) return
 
     const conf = BIOMES[biome] || BIOMES.open
 
-    // Depth-driven fog density boost (deeper = thicker fog)
+    // Read depth directly from camera Y (no prop needed)
+    const depth = Math.abs(state.camera.position.y)
     const depthMod = MathUtils.clamp(depth / 3000, 0, 1.5)
     const targetDensity = conf.fogDensity * 0.5 * (1 + depthMod * 0.6)
 
     _targetFog.set(conf.fogColor)
     _fogColor.set(fogRef.current.color.getHex())
 
-    // Smooth colour & density transition
     fogRef.current.color.lerp(_targetFog, MathUtils.clamp(1.5 * delta, 0, 1))
     fogRef.current.density = MathUtils.lerp(fogRef.current.density, targetDensity, 1.5 * delta)
-
-    // Also smoothly update background
     ;(scene.background as Color)?.lerp(_targetFog, MathUtils.clamp(1.5 * delta, 0, 1))
   })
 
   return (
     <>
-      {/* Ambient: changes with biome */}
       <ambientLight
         intensity={biomeConf.lightIntensity * 0.25}
         color={biomeConf.ambientColor}
       />
-
-      {/* Sun shaft directional from above */}
       <directionalLight
         position={[80, 300, 60]}
-        intensity={biomeConf.lightIntensity * (1.0 - MathUtils.clamp(depth / 800, 0, 0.9))}
+        intensity={biomeConf.lightIntensity * 0.5}
         color={biomeConf.lightColor}
         castShadow={false}
       />
-
-      {/* Secondary fill light from front-below for rim lighting on sub */}
       <directionalLight
         position={[0, -200, -100]}
         intensity={0.08}
         color="#003d6b"
       />
-
-      {/* Hemisphere — sky/ground */}
       <hemisphereLight
         args={[biomeConf.lightColor, '#000814', biomeConf.lightIntensity * 0.15]}
       />
 
-      {depth < 120 && <Environment preset="city" />}
+      <Environment preset="city" />
 
       <Hero />
       <BubbleTrail />
       <Terrain3D />
-      <CreatureManager onDiscovery={onDiscovery} />
-      <UnderwaterAtmosphere depth={depth} />
+      <CreatureManager onScanCreature={onScanCreature} onDiscovery={onDiscovery} />
+      <UnderwaterAtmosphere />
     </>
   )
-}
+})
 
 // ═════════════════════════════════════════════════════════════════════════════
 // Root scene component
 // ═════════════════════════════════════════════════════════════════════════════
 export default function OceanScene() {
-  const { coords, depth, addDiscovery } = usePlayerStore()
+  // Only subscribe to stable / rarely-changing store values
+  const addDiscovery = usePlayerStore(s => s.addDiscovery)
+  const playerName   = usePlayerStore(s => s.playerName)
   const { setCurrentBiome, dailyEvent }  = useWorldStore()
 
   const [currentBiome, setLocalBiome]    = useState<BiomeType>('coral')
-  const [pendingDiscovery, setPendingDiscovery] = useState<Discovery | null>(null)
   const [openPanel, setOpenPanel]        = useState<'log' | 'encyclopedia' | 'photo' | 'stats' | null>(null)
   const [photoMode, setPhotoMode]        = useState(false)
 
-  // Biome check every 1.5 s — no inner re-render overhead
+  // Scan state managed at the top level so ScanHUD can read it
+  const [scanState, setScanState]        = useState<ScanState>({ phase: 'idle' })
+  const [logToast, setLogToast]          = useState<string | null>(null)
+
+  // Coords/depth are read via refs — updated through a non-rendering subscription
+  // so that frequent player movement doesn't trigger React re-renders
+  const coordsRef = useRef(usePlayerStore.getState().coords)
+  const depthRef  = useRef(usePlayerStore.getState().depth)
+
   useEffect(() => {
-    const interval = setInterval(() => {
-      const b = getBiomeAt(coords.x, coords.y, depth) as BiomeType
-      if (b !== currentBiome) {
+    const unsub = usePlayerStore.subscribe((state) => {
+      coordsRef.current = state.coords
+      depthRef.current  = state.depth
+    })
+    return unsub
+  }, [])
+
+  // ── Stable biome check: interval only started once, reads coords via ref ──
+  useEffect(() => {
+    let prevBiome: BiomeType = 'coral'
+    const id = setInterval(() => {
+      const c = coordsRef.current
+      const d = depthRef.current
+      const b = getBiomeAt(c.x, c.y, d) as BiomeType
+      if (b !== prevBiome) {
+        prevBiome = b
         setLocalBiome(b)
         setCurrentBiome(b)
       }
-    }, 1500)
-    return () => clearInterval(interval)
-  }, [coords.x, coords.y, depth, currentBiome, setCurrentBiome])
+    }, 2000)
+    return () => clearInterval(id)
+  }, [setCurrentBiome]) // setCurrentBiome is stable (Zustand)
 
-  const handleDiscovery = (discovery: Discovery) => {
-    addDiscovery(discovery)
-    setPendingDiscovery(discovery)
-  }
+  // ── Scan flow ──────────────────────────────────────────────────────────────
+  const handleScanCreature = useCallback((
+    id: string, speciesId: string, name: string, dna: any,
+    wx: number, wy: number, wz: number,
+  ) => {
+    setScanState({
+      phase: 'selected',
+      id, speciesId, name, dna,
+      wx, wy, wz,
+    })
+  }, [])
+
+  const handleScanStart = useCallback(() => {
+    setScanState(prev => prev.phase === 'selected' ? { ...prev, phase: 'scanning', progress: 0 } : prev)
+  }, [])
+
+  const handleScanComplete = useCallback((d: Discovery) => {
+    addDiscovery(d)
+    setScanState(prev => ({ ...prev, phase: 'result', discovery: d }))
+    // Small toast notification
+    setLogToast('New species added to Research Log')
+    setTimeout(() => setLogToast(null), 4000)
+  }, [addDiscovery])
+
+  const handleScanDismiss = useCallback(() => {
+    setScanState({ phase: 'idle' })
+  }, [])
+
+  const handleDiscovery = useCallback((d: Discovery) => {
+    // Legacy path kept for compatibility – routes through same store call
+    addDiscovery(d)
+  }, [addDiscovery])
 
   return (
     <div className="ocean-root">
@@ -143,12 +184,12 @@ export default function OceanScene() {
           stencil: false,
           depth: true,
         }}
-        dpr={[1, 1.5]}       // cap pixel ratio for performance
+        dpr={[1, 1.5]}
         frameloop="always"
       >
         <EnvironmentScene
           biome={currentBiome}
-          depth={depth}
+          onScanCreature={handleScanCreature}
           onDiscovery={handleDiscovery}
         />
 
@@ -175,7 +216,7 @@ export default function OceanScene() {
         </EffectComposer>
       </Canvas>
 
-      {/* ── Cockpit overlay (shown in first-person mode via CSS class) ───── */}
+      {/* ── Cockpit overlay ─────────────────────────────────────────────── */}
       <div className="cockpit-frame" id="cockpit-frame" />
 
       {!photoMode && (
@@ -191,17 +232,26 @@ export default function OceanScene() {
         </>
       )}
 
+      {/* Scan HUD – always rendered so it can track scan progress */}
+      <ScanHUD
+        scanState={scanState}
+        playerName={playerName}
+        onScanStart={handleScanStart}
+        onScanComplete={handleScanComplete}
+        onDismiss={handleScanDismiss}
+      />
+
+      {/* Log toast */}
+      {logToast && (
+        <div className="log-toast" id="log-toast">
+          <span>🔬</span> {logToast}
+        </div>
+      )}
+
       {photoMode && (
         <PhotoMode
           canvasRef={{ current: document.querySelector('canvas') }}
           onClose={() => setPhotoMode(false)}
-        />
-      )}
-
-      {pendingDiscovery && (
-        <DiscoveryAlert
-          discovery={pendingDiscovery}
-          onClose={() => setPendingDiscovery(null)}
         />
       )}
 

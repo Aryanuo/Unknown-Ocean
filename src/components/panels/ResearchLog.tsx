@@ -62,8 +62,8 @@ export function ResearchLog({ onClose }: Props) {
 
         {discoveries.length === 0 ? (
           <div className="panel-empty">
-            <div className="panel-empty-icon">🌊</div>
-            <p>No discoveries yet. Explore the ocean and approach creatures to discover them.</p>
+            <div className="panel-empty-icon">🔬</div>
+            <p>No discoveries yet. Click on a fish and choose <strong>Scan</strong> to discover unknown species.</p>
           </div>
         ) : (
           <div className="panel-list">
