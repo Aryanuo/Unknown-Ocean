@@ -1,4 +1,4 @@
-import { useRef, useEffect, useMemo } from 'react'
+import React, { useRef, useEffect, useMemo } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import {
   Vector3, Group, Quaternion, Euler, MathUtils,
@@ -47,8 +47,12 @@ const FOV_BASE         = 62
 const FOV_BOOST        = 16
 const STORE_SYNC_DIST  = 6
 
-export function Hero() {
-  const { coords, depth, setCoords, setDepth } = usePlayerStore()
+export const Hero = React.memo(function Hero() {
+  // Only subscribe to stable setter references — never to coords/depth
+  // (Hero WRITES those, so subscribing would cause a write→re-render loop)
+  const setCoords = usePlayerStore(s => s.setCoords)
+  const setDepth  = usePlayerStore(s => s.setDepth)
+  const initialState = useRef(usePlayerStore.getState())
   const { camera } = useThree()
 
   // ── Refs ──────────────────────────────────────────────────────────────────
@@ -68,11 +72,11 @@ export function Hero() {
   const subPitch   = useRef(0)
   const bankAngle  = useRef(0)
 
-  const camPos     = useRef(new Vector3(coords.x, -Math.max(10, depth), coords.y + 36))
+  const camPos     = useRef(new Vector3(initialState.current.coords.x, -Math.max(10, initialState.current.depth), initialState.current.coords.y + 36))
   const camMode    = useRef<'third' | 'first'>('third')
   const headlights = useRef(true)
 
-  const storePos   = useRef(new Vector3(coords.x, -Math.max(10, depth), coords.y))
+  const storePos   = useRef(new Vector3(initialState.current.coords.x, -Math.max(10, initialState.current.depth), initialState.current.coords.y))
   const keys       = useRef<Set<string>>(new Set())
 
   // Smooth camera pull-back accumulator
@@ -91,8 +95,6 @@ export function Hero() {
       if (e.key.toLowerCase() === 'f') {
         headlights.current = !headlights.current
       }
-      // Prevent page scroll on Space
-      if (e.key === ' ') e.preventDefault()
     }
     const up = (e: KeyboardEvent) => keys.current.delete(e.key.toLowerCase())
 
@@ -100,7 +102,9 @@ export function Hero() {
     window.addEventListener('keyup',   up)
 
     if (groupRef.current) {
-      groupRef.current.position.set(coords.x, -Math.max(10, depth), coords.y)
+      const ic = initialState.current.coords
+      const id = initialState.current.depth
+      groupRef.current.position.set(ic.x, -Math.max(10, id), ic.y)
     }
     if (spotTarget.current && groupRef.current) {
       groupRef.current.add(spotTarget.current)
@@ -126,9 +130,9 @@ export function Hero() {
     const left  = (k.has('a') || k.has('arrowleft'))  ? 1 : 0
     const right = (k.has('d') || k.has('arrowright')) ? 1 : 0
 
-    // Ascend: Space or E, Descend: Ctrl or Q
-    const ascend = (k.has(' ') || k.has('e'))                       ? 1 : 0
-    const descend= (k.has('control') || k.has('q'))                 ? 1 : 0
+    // Ascend: Q, Descend: E
+    const ascend = k.has('q') ? 1 : 0
+    const descend= k.has('e') ? 1 : 0
 
     const boost  = (k.has('shift'))                                  ? BOOST_MULT : 1.0
 
@@ -455,4 +459,4 @@ export function Hero() {
       {/* BubbleTrail is now rendered outside the group (world space) via OceanScene */}
     </group>
   )
-}
+})
