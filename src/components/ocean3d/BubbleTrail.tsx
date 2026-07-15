@@ -1,4 +1,4 @@
-import { useRef, useMemo } from 'react'
+import React, { useRef, useMemo } from 'react'
 import { useFrame } from '@react-three/fiber'
 import {
   InstancedMesh, Object3D, SphereGeometry, MeshBasicMaterial,
@@ -24,7 +24,7 @@ interface BubbleData {
   active: boolean
 }
 
-export function BubbleTrail() {
+export const BubbleTrail = React.memo(function BubbleTrail() {
   const meshRef  = useRef<InstancedMesh>(null)
   const emitAcc  = useRef(0)
   // Emit multiple bubbles per interval for richer trail
@@ -136,4 +136,4 @@ export function BubbleTrail() {
     // frustumCulled=false so we never miss bubbles near camera edge
     <instancedMesh ref={meshRef} args={[geo, mat, BUBBLE_COUNT]} frustumCulled={false} />
   )
-}
+})
