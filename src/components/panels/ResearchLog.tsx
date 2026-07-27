@@ -7,7 +7,7 @@ interface Props { onClose: () => void }
 
 export function ResearchLog({ onClose }: Props) {
   const {
-    discoveries, playerName, totalDistance, photosCapture, depth,
+    discoveries, photos, playerName, totalDistance, photosCapture, depth,
     researchPoints, equipmentLevel, upgradeEquipment
   } = usePlayerStore()
 
@@ -101,6 +101,45 @@ export function ResearchLog({ onClose }: Props) {
 
         {tab === 'log' ? (
           <>
+            {photos.length > 0 && (
+              <div style={{ marginBottom: '14px' }}>
+                <div className="panel-section-label text-mono" style={{ marginBottom: '8px' }}>
+                  FEATURED EXPEDITION PHOTOGRAPHY
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
+                  {[...photos].sort((a, b) => b.score - a.score).slice(0, 3).map((p) => (
+                    <div
+                      key={p.id}
+                      style={{
+                        position: 'relative',
+                        height: '75px',
+                        borderRadius: '6px',
+                        overflow: 'hidden',
+                        border: '1px solid rgba(0, 229, 255, 0.2)',
+                      }}
+                    >
+                      <img src={p.dataUrl} alt={p.subjectName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      <div
+                        className="text-mono"
+                        style={{
+                          position: 'absolute',
+                          bottom: '4px',
+                          right: '4px',
+                          background: 'rgba(0,0,0,0.8)',
+                          fontSize: '8px',
+                          padding: '1px 5px',
+                          borderRadius: '3px',
+                          color: '#00e5ff',
+                        }}
+                      >
+                        {p.score} PTS
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="panel-section-label text-mono">DISCOVERIES & LOGS</div>
 
             {discoveries.length === 0 ? (

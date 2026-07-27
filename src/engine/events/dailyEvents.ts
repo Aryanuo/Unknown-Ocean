@@ -1,3 +1,13 @@
+export type WorldEffectType = 'migration' | 'awakening' | 'bloom' | 'hunt' | 'portal' | 'meteor' | 'eclipse' | 'choir'
+
+export interface EventWorldEffect {
+  particleColor?: string
+  lightingMult?: number
+  spawnOverride?: 'leviathan' | 'squid' | 'crater' | 'portal'
+  glowMultiplier?: number
+  spawnRateMultiplier?: number
+}
+
 export interface DailyEvent {
   id: string
   name: string
@@ -5,7 +15,8 @@ export interface DailyEvent {
   icon: string
   color: string
   endsAt: number // timestamp
-  type: 'migration' | 'awakening' | 'bloom' | 'hunt' | 'portal' | 'meteor' | 'eclipse' | 'choir'
+  type: WorldEffectType
+  worldEffect: EventWorldEffect
 }
 
 const EVENTS: Omit<DailyEvent, 'endsAt'>[] = [
@@ -16,6 +27,12 @@ const EVENTS: Omit<DailyEvent, 'endsAt'>[] = [
     icon: '🐋',
     color: '#0077b6',
     type: 'migration',
+    worldEffect: {
+      spawnOverride: 'leviathan',
+      particleColor: '#00b4d8',
+      lightingMult: 1.1,
+      spawnRateMultiplier: 1.3,
+    },
   },
   {
     id: 'temple',
@@ -24,14 +41,24 @@ const EVENTS: Omit<DailyEvent, 'endsAt'>[] = [
     icon: '🏛️',
     color: '#ffd60a',
     type: 'awakening',
+    worldEffect: {
+      spawnOverride: 'portal',
+      particleColor: '#ffe066',
+      glowMultiplier: 1.8,
+    },
   },
   {
     id: 'bloom',
     name: 'Glowing Bloom',
-    description: 'Millions of bioluminescent jellyfish fill the ocean. Everything glows blue.',
+    description: 'Millions of bioluminescent jellyfish fill the ocean. Everything glows cyan and gold.',
     icon: '✨',
     color: '#90e0ef',
     type: 'bloom',
+    worldEffect: {
+      particleColor: '#00ffff',
+      glowMultiplier: 2.5,
+      spawnRateMultiplier: 2.0,
+    },
   },
   {
     id: 'squid',
@@ -40,38 +67,66 @@ const EVENTS: Omit<DailyEvent, 'endsAt'>[] = [
     icon: '🦑',
     color: '#c77dff',
     type: 'hunt',
+    worldEffect: {
+      spawnOverride: 'squid',
+      particleColor: '#e0aaff',
+      lightingMult: 0.85,
+    },
   },
   {
     id: 'portal',
     name: 'Abyss Portal',
-    description: 'A crack in the ocean floor has opened revealing an unknown biome. It closes at midnight.',
+    description: 'A crack in the ocean floor has opened revealing an unknown anomaly. It closes at midnight.',
     icon: '🌀',
     color: '#023e8a',
     type: 'portal',
+    worldEffect: {
+      spawnOverride: 'portal',
+      particleColor: '#7209b7',
+      glowMultiplier: 2.0,
+      lightingMult: 0.7,
+    },
   },
   {
     id: 'meteor',
     name: 'Meteor Impact',
-    description: 'A glowing meteor crashed beneath the waves. New species have appeared near the impact site.',
+    description: 'A glowing meteor crashed beneath the waves. Rare species have appeared near the site.',
     icon: '☄️',
     color: '#ff4d00',
     type: 'meteor',
+    worldEffect: {
+      spawnOverride: 'crater',
+      particleColor: '#ff7043',
+      glowMultiplier: 2.2,
+    },
   },
   {
     id: 'eclipse',
     name: 'Lunar Eclipse',
-    description: 'The ocean lighting has shifted. Rare nocturnal creatures have emerged from the deep.',
+    description: 'The ocean lighting has shifted into deep shadow. Rare nocturnal creatures have emerged.',
     icon: '🌑',
     color: '#5b2d8e',
     type: 'eclipse',
+    worldEffect: {
+      lightingMult: 0.35,
+      particleColor: '#b5179e',
+      glowMultiplier: 3.0,
+      spawnRateMultiplier: 1.5,
+    },
   },
   {
     id: 'choir',
     name: 'Whale Choir',
-    description: 'The ocean is filled with an ancient whale song. Navigate by sound.',
+    description: 'The ocean is filled with an ancient whale song. Navigate by acoustic signatures.',
     icon: '🎵',
     color: '#1b4332',
     type: 'choir',
+    worldEffect: {
+      spawnOverride: 'leviathan',
+      particleColor: '#52b788',
+      lightingMult: 1.0,
+      spawnRateMultiplier: 1.6,
+    },
   },
 ]
 

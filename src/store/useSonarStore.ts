@@ -7,6 +7,7 @@ export interface SonarBlip {
   id: string
   relX: number  // relative X to sub at time of ping
   relZ: number  // relative Z to sub at time of ping
+  relY: number  // relative Y (positive = target is above sub, negative = below)
   distance: number
   rarity: string
   scanned: boolean
@@ -53,12 +54,14 @@ export const useSonarStore = create<SonarState>()((set, get) => ({
     const newBlips: SonarBlip[] = neighbors.map((n) => {
       const relX = n.position.x - subPos.x
       const relZ = n.position.z - subPos.z
+      const relY = n.position.y - subPos.y
       const distance = Math.sqrt(relX * relX + relZ * relZ)
 
       return {
         id: `blip_${n.id}_${now}`,
         relX,
         relZ,
+        relY,
         distance,
         rarity: n.rarity,
         scanned: false,

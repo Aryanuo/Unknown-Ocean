@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useSonarStore } from '../../store/useSonarStore'
 import { usePlayerStore } from '../../store/usePlayerStore'
+import { heroSubYaw } from '../ocean3d/Hero'
 import './SonarMinimap.css'
 
 const BLIP_LIFETIME_MS = 8000
@@ -63,8 +64,14 @@ export function SonarMinimap() {
         {/* Radar sweep */}
         <div className={`radar-sweep ${isPinging ? 'sweeping' : ''}`} />
 
-        {/* Submarine center marker */}
-        <div className="sub-center-dot" />
+        {/* Submarine center marker & heading arrow */}
+        <div
+          className="sub-center-container"
+          style={{ transform: `translate(-50%, -50%) rotate(${-(heroSubYaw.current * (180 / Math.PI))}deg)` }}
+        >
+          <div className="sub-heading-arrow" />
+          <div className="sub-center-dot" />
+        </div>
 
         {/* Blips with age-based fade */}
         {blips.map((b) => {
@@ -81,10 +88,14 @@ export function SonarMinimap() {
           const lifeFrac = Math.max(0, 1 - age / BLIP_LIFETIME_MS)
           const opacity = lifeFrac
 
+          const relYRounded = Math.round(b.relY ?? 0)
+          const depthLabel = relYRounded > 0 ? `▲ +${relYRounded}m` : relYRounded < 0 ? `▼ ${relYRounded}m` : `• 0m`
+
           return (
             <div
               key={b.id}
               className="sonar-blip"
+              title={`Distance: ${Math.round(b.distance)}m | Vertical: ${depthLabel} (${b.rarity})`}
               style={{
                 left: `calc(50% + ${nx}px)`,
                 top: `calc(50% + ${ny}px)`,
@@ -92,7 +103,11 @@ export function SonarMinimap() {
                 boxShadow: `0 0 6px ${color}`,
                 opacity,
               }}
-            />
+            >
+              <span className="blip-vertical-indicator text-mono">
+                {relYRounded > 5 ? '▲' : relYRounded < -5 ? '▼' : '='}
+              </span>
+            </div>
           )
         })}
       </div>

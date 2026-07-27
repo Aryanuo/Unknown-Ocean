@@ -2,6 +2,7 @@ import React, { useState, useCallback, useRef, useEffect } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { Vector3 } from 'three'
 import { usePlayerStore, Discovery } from '../../store/usePlayerStore'
+import { useWorldStore } from '../../store/useWorldStore'
 import { getBiomeAt } from '../../engine/procedural/biomeGenerator'
 import { getCreatureSeed, generateCreatureDNA, generateSpeciesId, generateSpeciesName } from '../../engine/procedural/creatureFactory'
 import { Creature3D, registerSubPos } from './Creature3D'
@@ -36,13 +37,17 @@ function chunkKey(cx: number, cy: number, cz: number): string {
   return `${cx}|${cy}|${cz}`
 }
 
+// Module-level ref for event spawn rate multiplier (updated by store subscription)
+const spawnRateRef = { current: 1.0 }
+
 // Generate the full list of stable creature IDs+data for one chunk (pure function)
 function generateChunkCreatures(cx: number, cy: number, cz: number): InstancedCreature[] {
   const chunkX = cx * CHUNK_SIZE
   const chunkY = cy * CHUNK_SIZE
   const chunkZ = cz * CHUNK_SIZE
 
-  const count = 1 + Math.floor(Math.abs(Math.sin(chunkX * 0.001 + chunkZ * 0.002)) * 3)
+  const baseCount = 1 + Math.floor(Math.abs(Math.sin(chunkX * 0.001 + chunkZ * 0.002)) * 3)
+  const count = Math.min(8, Math.floor(baseCount * spawnRateRef.current))
   const results: InstancedCreature[] = []
 
   for (let i = 0; i < count; i++) {
@@ -62,7 +67,8 @@ function generateChunkCreatures(cx: number, cy: number, cz: number): InstancedCr
   return results
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────────
+
 export function CreatureManager({ onScanCreature, onDiscovery }: Props) {
   // Persistent map: id → creature data (never fully replaced)
   const creatureMap  = useRef<Map<string, InstancedCreature>>(new Map())
@@ -74,6 +80,17 @@ export function CreatureManager({ onScanCreature, onDiscovery }: Props) {
 
   // React render trigger – only incremented when creature set actually changes
   const [renderTick, setRenderTick] = useState(0)
+
+  // Sync event spawn rate from world store (no re-renders; just update a ref)
+  useEffect(() => {
+    const updateRate = () => {
+      const mult = useWorldStore.getState().dailyEvent?.worldEffect?.spawnRateMultiplier ?? 1.0
+      spawnRateRef.current = mult
+    }
+    updateRate()
+    const unsub = useWorldStore.subscribe(updateRate)
+    return unsub
+  }, [])
 
   // Set of speciesIds the player has already scanned
   // Synced via a non-rendering subscription so discovery changes don't re-render CreatureManager

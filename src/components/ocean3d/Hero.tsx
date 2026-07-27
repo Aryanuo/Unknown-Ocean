@@ -15,6 +15,8 @@ export const heroPropWorldPos = { current: new Vector3() }
 export const heroVelocityRef  = { current: new Vector3() }
 // World-space submarine center position (for creature AI)
 export const heroSubWorldPos  = { current: new Vector3() }
+// Current submarine yaw (radians) — for sonar heading indicator
+export const heroSubYaw       = { current: 0 }
 
 // ─── Pre-allocated reusables (zero per-frame allocations) ────────────────────
 const _moveDir    = new Vector3()
@@ -200,6 +202,7 @@ export const Hero = React.memo(function Hero() {
 
     // World-space submarine center position (for creature AI awareness)
     heroSubWorldPos.current.copy(_subPos)
+    heroSubYaw.current = subYaw.current
     ;(window as any).__heroSubPos = heroSubWorldPos.current
 
     // World-space propeller position for BubbleTrail

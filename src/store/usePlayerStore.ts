@@ -24,6 +24,30 @@ export interface Discovery {
   isFirstEver: boolean
 }
 
+export interface DiscoveredMystery {
+  id: string           // mystery instance id (e.g. "mystery_5_-3")
+  type: string         // MysteryType
+  name: string
+  timestamp: number
+  depth: number
+  coords: { x: number; y: number }
+  artifactCollected: boolean
+}
+
+export interface SavedPhoto {
+  id: string
+  dataUrl: string
+  timestamp: number
+  score: number
+  rpEarned: number
+  subjectName: string
+  subjectRarity: string
+  subjectBehavior: string
+  biome: string
+  depth: number
+  creaturesCount: number
+}
+
 export interface CreatureDNA {
   bodyLength: number
   bodyWidth: number
@@ -81,6 +105,8 @@ export interface PlayerState {
   coords: { x: number; y: number }
   depth: number
   discoveries: Discovery[]
+  discoveredMysteries: DiscoveredMystery[]
+  photos: SavedPhoto[]
   totalDistance: number
   photosCapture: number
   researchPoints: number
@@ -98,6 +124,8 @@ export interface PlayerState {
   upgradeEquipment: (type: EquipmentType) => boolean
   initDailyMissions: () => void
   claimMissionReward: (id: string) => boolean
+  addDiscoveredMystery: (m: DiscoveredMystery) => void
+  addPhoto: (photo: SavedPhoto) => void
 }
 
 function generatePlayerId(): string {
@@ -132,6 +160,8 @@ export const usePlayerStore = create<PlayerState>()(
       },
       dailyMissions: [],
       lastMissionDaySeed: 0,
+      discoveredMysteries: [] as DiscoveredMystery[],
+      photos: [] as SavedPhoto[],
 
       initDailyMissions: () => {
         const todaySeed = getDaySeed()
@@ -221,6 +251,25 @@ export const usePlayerStore = create<PlayerState>()(
           ),
         }))
         return true
+      },
+
+      addDiscoveredMystery: (m: DiscoveredMystery) => {
+        set((state) => {
+          if (state.discoveredMysteries.some(d => d.id === m.id)) return state
+          return { discoveredMysteries: [...state.discoveredMysteries, m] }
+        })
+      },
+
+      addPhoto: (photo: SavedPhoto) => {
+        set((state) => {
+          const updatedMissions = checkMissionProgressOnPhoto(state.dailyMissions)
+          return {
+            photos: [photo, ...state.photos],
+            photosCapture: state.photosCapture + 1,
+            researchPoints: state.researchPoints + photo.rpEarned,
+            dailyMissions: updatedMissions,
+          }
+        })
       },
     }),
     { name: 'unknown-ocean-player' }

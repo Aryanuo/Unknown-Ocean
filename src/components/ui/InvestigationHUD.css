@@ -1,0 +1,269 @@
+/* InvestigationHUD.css — Styles for the mystery investigation overlay */
+
+.investigation-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: inv-fade-in 0.3s ease;
+}
+
+@keyframes inv-fade-in {
+  from { opacity: 0; transform: scale(0.95); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+.investigation-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 5, 15, 0.7);
+  backdrop-filter: blur(4px);
+}
+
+.investigation-card {
+  position: relative;
+  z-index: 1;
+  width: 520px;
+  max-width: 94vw;
+  border-radius: 16px;
+  border: 1px solid rgba(var(--rarity-color, 0, 229, 255), 0.3);
+  box-shadow:
+    0 0 60px rgba(0, 0, 0, 0.8),
+    0 0 30px color-mix(in srgb, var(--rarity-color, #00e5ff) 20%, transparent);
+  padding: 0;
+  overflow: hidden;
+  animation: inv-card-in 0.4s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+@keyframes inv-card-in {
+  from { opacity: 0; transform: translateY(24px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ── Header ─────────────────────────────────────────────────────────── */
+.inv-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 20px 20px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.inv-icon {
+  font-size: 36px;
+  flex-shrink: 0;
+  filter: drop-shadow(0 0 10px currentColor);
+}
+
+.inv-header-text {
+  flex: 1;
+}
+
+.inv-rarity-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  font-weight: 700;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+}
+
+.inv-name {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--ui-text-bright);
+  line-height: 1.2;
+}
+
+.inv-close-btn {
+  background: none;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  color: var(--ui-text-dim);
+  width: 30px;
+  height: 30px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+}
+.inv-close-btn:hover {
+  border-color: rgba(255, 255, 255, 0.4);
+  color: var(--ui-text-bright);
+}
+
+/* ── Scan phase ──────────────────────────────────────────────────────── */
+.inv-scan-phase {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 32px 24px 28px;
+}
+
+.inv-scan-ring {
+  position: relative;
+  width: 100px;
+  height: 100px;
+}
+
+.inv-scan-svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.inv-scan-track {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.08);
+  stroke-width: 5;
+}
+
+.inv-scan-fill {
+  fill: none;
+  stroke-width: 5;
+  stroke-linecap: round;
+  stroke-dasharray: 0 264;
+  transition: stroke-dasharray 0.05s linear;
+  filter: drop-shadow(0 0 4px currentColor);
+}
+
+.inv-scan-pct {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.inv-scan-label {
+  font-size: 10px;
+  letter-spacing: 0.25em;
+  color: var(--ui-text-dim);
+  animation: inv-blink 1s ease-in-out infinite alternate;
+}
+
+@keyframes inv-blink {
+  from { opacity: 0.5; }
+  to   { opacity: 1; }
+}
+
+/* ── Reveal phase ────────────────────────────────────────────────────── */
+.inv-reveal-phase {
+  padding: 20px 24px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  animation: inv-fade-in 0.5s ease;
+}
+
+.inv-new-badge {
+  align-self: flex-start;
+  padding: 3px 10px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  font-weight: 700;
+  color: #000;
+}
+
+.inv-lore-text {
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--ui-text-dim);
+  border-left: 2px solid rgba(255, 255, 255, 0.12);
+  padding-left: 14px;
+  font-style: italic;
+}
+
+.inv-reward-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.inv-rp-gain {
+  font-family: var(--font-mono);
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-shadow: 0 0 12px #ffd60a;
+}
+
+.inv-artifact-btn {
+  padding: 6px 14px;
+  border-radius: 6px;
+  background: transparent;
+  border-width: 1px;
+  border-style: solid;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  letter-spacing: 0.1em;
+}
+.inv-artifact-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 0 12px currentColor;
+}
+
+.inv-dismiss-btn {
+  width: 100%;
+  padding: 10px;
+  border-radius: 8px;
+  background: rgba(0, 229, 255, 0.1);
+  border: 1px solid rgba(0, 229, 255, 0.3);
+  color: #00e5ff;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  text-transform: uppercase;
+}
+.inv-dismiss-btn:hover {
+  background: rgba(0, 229, 255, 0.2);
+  border-color: #00e5ff;
+  box-shadow: 0 0 16px rgba(0, 229, 255, 0.3);
+}
+
+/* ── Artifact phase ──────────────────────────────────────────────────── */
+.inv-artifact-phase {
+  padding: 20px 24px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  animation: inv-fade-in 0.5s ease;
+}
+
+.inv-artifact-title {
+  font-size: 10px;
+  letter-spacing: 0.25em;
+  color: var(--ui-text-dim);
+  text-transform: uppercase;
+}
+
+.inv-artifact-name {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+.inv-artifact-lore {
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--ui-text-dim);
+  border-left: 2px solid rgba(255, 255, 255, 0.12);
+  padding-left: 14px;
+  font-style: italic;
+}

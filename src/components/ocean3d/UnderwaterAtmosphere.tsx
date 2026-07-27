@@ -3,8 +3,9 @@ import { useFrame, useThree } from '@react-three/fiber'
 import {
   InstancedMesh, Object3D, MeshBasicMaterial, SphereGeometry,
   AdditiveBlending, Color, PlaneGeometry, ShaderMaterial, Vector3,
-  MathUtils, BufferGeometry, BufferAttribute, Points, PointsMaterial
+  MathUtils, BufferGeometry, BufferAttribute, Points, PointsMaterial,
 } from 'three'
+import { useWorldStore } from '../../store/useWorldStore'
 
 // ── Pre-allocated scratch object ─────────────────────────────────────────────
 const _dummy  = new Object3D()
@@ -78,13 +79,18 @@ const causticFrag = /* glsl */`
 // ═════════════════════════════════════════════════════════════════════════════
 // Component
 // ═════════════════════════════════════════════════════════════════════════════
-const PARTICLE_COUNT = 220
-const RAY_COUNT      = 8
+const PARTICLE_COUNT   = 220
+const RAY_COUNT        = 8
+const JELLYFISH_COUNT  = 60   // bloom event jellyfish
+const ECLIPSE_COUNT    = 180  // eclipse event dark veil
 
 
 
 export const UnderwaterAtmosphere = React.memo(function UnderwaterAtmosphere() {
   const { camera } = useThree()
+  const dailyEvent = useWorldStore((s) => s.dailyEvent)
+  const eventType  = dailyEvent?.type
+  const effect     = dailyEvent?.worldEffect
 
   // ── Particle instanced mesh ──────────────────────────────────────────────
   const particleRef = useRef<InstancedMesh>(null)
@@ -111,6 +117,47 @@ export const UnderwaterAtmosphere = React.memo(function UnderwaterAtmosphere() {
   }), [])
 
   const particleGeo = useMemo(() => new SphereGeometry(1, 4, 4), [])
+
+  // ── Bloom event: jellyfish swarm ─────────────────────────────────────────
+  const jellyRef  = useRef<InstancedMesh>(null)
+  const jellyData = useMemo(() => Array.from({ length: JELLYFISH_COUNT }, (_, i) => ({
+    ox: (Math.random() - 0.5) * 320,
+    oy: (Math.random() - 0.5) * 140,
+    oz: (Math.random() - 0.5) * 320,
+    driftY:  0.15 + Math.random() * 0.6,
+    phase:   Math.random() * Math.PI * 2,
+    speed:   0.5 + Math.random() * 1.2,
+    radius:  1.5 + Math.random() * 2.5,
+  })), [])
+
+  const jellyGeo = useMemo(() => new SphereGeometry(1, 8, 5), [])
+  const jellyMat = useMemo(() => new MeshBasicMaterial({
+    color: new Color('#00ffff'),
+    transparent: true,
+    opacity: 0.0,
+    depthWrite: false,
+    blending: AdditiveBlending,
+  }), [])
+
+  // ── Eclipse event: dark veil particles ───────────────────────────────────
+  const eclipseRef  = useRef<InstancedMesh>(null)
+  const eclipseData = useMemo(() => Array.from({ length: ECLIPSE_COUNT }, (_, i) => ({
+    ox: (Math.random() - 0.5) * 350,
+    oy: (Math.random() - 0.5) * 160,
+    oz: (Math.random() - 0.5) * 350,
+    driftY: -(0.1 + Math.random() * 0.4), // drift DOWN for eclipse
+    phase:   Math.random() * Math.PI * 2,
+    scale:   0.3 + Math.random() * 1.2,
+  })), [])
+
+  const eclipseGeo = useMemo(() => new SphereGeometry(1, 4, 4), [])
+  const eclipseMat = useMemo(() => new MeshBasicMaterial({
+    color: new Color('#b5179e'),
+    transparent: true,
+    opacity: 0.0,
+    depthWrite: false,
+    blending: AdditiveBlending,
+  }), [])
 
   // ── God ray materials (one per ray, each with own time uniform) ───────────
   const rayMats = useMemo(() => {
@@ -192,6 +239,8 @@ export const UnderwaterAtmosphere = React.memo(function UnderwaterAtmosphere() {
     const t   = state.clock.elapsedTime
     _camPos.copy(camera.position)
     const currentDepth = Math.abs(_camPos.y) // depth in units = metres
+    const isBloom   = eventType === 'bloom'
+    const isEclipse = eventType === 'eclipse'
 
     // ── Particles: orbit camera ──────────────────────────────────────────
     if (particleRef.current) {
@@ -221,12 +270,65 @@ export const UnderwaterAtmosphere = React.memo(function UnderwaterAtmosphere() {
       }
       particleRef.current.instanceMatrix.needsUpdate = true
 
-      // Opacity depends on depth (less visible in surface waters, richer deeper)
-      particleMat.opacity = MathUtils.lerp(0.3, 0.7, MathUtils.smoothstep(currentDepth, 50, 500))
+      // Opacity depends on depth + event glow multiplier
+      const glowMult = effect?.glowMultiplier ?? 1.0
+      particleMat.opacity = MathUtils.lerp(0.3, 0.7, MathUtils.smoothstep(currentDepth, 50, 500)) * Math.min(1.5, glowMult)
+
+      // Dynamic particle color shift when event specifies particleColor
+      if (effect?.particleColor) {
+        particleMat.color.lerp(new Color(effect.particleColor), 0.05)
+      } else {
+        particleMat.color.lerp(new Color('#90e0ef'), 0.05)
+      }
+    }
+
+    // ── Bloom jellyfish swarm ────────────────────────────────────────────
+    if (jellyRef.current) {
+      const targetOpacity = isBloom ? 0.55 : 0.0
+      jellyMat.opacity = MathUtils.lerp(jellyMat.opacity, targetOpacity, 2 * delta)
+      if (isBloom) {
+        jellyMat.color.lerp(new Color(0.5 + 0.5 * Math.sin(t * 0.5) > 0.5 ? '#00ffff' : '#ffd60a'), 0.04)
+      }
+      for (let i = 0; i < JELLYFISH_COUNT; i++) {
+        const jd = jellyData[i]
+        jd.oy += jd.driftY * delta * (isBloom ? 1.8 : 0.2)
+        if (jd.oy > 70)  jd.oy -= 140
+        if (jd.oy < -70) jd.oy += 140
+        // Jellyfish pulse (vertical squash-stretch)
+        const pulse = jd.radius * (1.0 + 0.35 * Math.sin(t * jd.speed + jd.phase))
+        const squash = 1.0 - 0.3 * Math.abs(Math.sin(t * jd.speed * 0.5 + jd.phase))
+        _dummy.position.set(
+          _camPos.x + jd.ox,
+          _camPos.y + jd.oy,
+          _camPos.z + jd.oz,
+        )
+        _dummy.scale.set(pulse, pulse * squash, pulse)
+        _dummy.updateMatrix()
+        jellyRef.current.setMatrixAt(i, _dummy.matrix)
+      }
+      jellyRef.current.instanceMatrix.needsUpdate = true
+    }
+
+    // ── Eclipse dark veil ────────────────────────────────────────────────
+    if (eclipseRef.current) {
+      const targetOpacity = isEclipse ? 0.35 : 0.0
+      eclipseMat.opacity = MathUtils.lerp(eclipseMat.opacity, targetOpacity, 2 * delta)
+      for (let i = 0; i < ECLIPSE_COUNT; i++) {
+        const ed = eclipseData[i]
+        ed.oy += ed.driftY * delta * (isEclipse ? 1.0 : 0.1)
+        if (ed.oy < -80) ed.oy += 160
+        if (ed.oy > 80)  ed.oy -= 160
+        const s = ed.scale * (0.9 + 0.1 * Math.sin(t * 0.8 + ed.phase))
+        _dummy.position.set(_camPos.x + ed.ox, _camPos.y + ed.oy, _camPos.z + ed.oz)
+        _dummy.scale.setScalar(s)
+        _dummy.updateMatrix()
+        eclipseRef.current.setMatrixAt(i, _dummy.matrix)
+      }
+      eclipseRef.current.instanceMatrix.needsUpdate = true
     }
 
     // ── God rays (only visible at shallow-mid depth, near surface light) ──
-    const rayAlpha = MathUtils.clamp(1.0 - currentDepth / 250, 0, 0.35)
+    const rayAlpha = MathUtils.clamp(1.0 - currentDepth / 250, 0, 0.35) * (effect?.lightingMult ?? 1.0)
     for (let i = 0; i < RAY_COUNT; i++) {
       const ro = rayOffsets[i]
       const mat = rayMats[i]
@@ -237,7 +339,7 @@ export const UnderwaterAtmosphere = React.memo(function UnderwaterAtmosphere() {
     // ── Caustics: positioned on seabed plane ──────────────────────────────
     causticMat.uniforms.uTime.value = t
     // Caustics more visible in shallow water
-    const causticAlpha = MathUtils.clamp(1.0 - currentDepth / 300, 0, 1)
+    const causticAlpha = MathUtils.clamp(1.0 - currentDepth / 300, 0, 1) * (effect?.lightingMult ?? 1.0)
     causticMat.uniforms.uColor.value.setStyle(
       currentDepth < 100 ? '#6cd4ff' : '#2196f3'
     )
@@ -245,10 +347,13 @@ export const UnderwaterAtmosphere = React.memo(function UnderwaterAtmosphere() {
 
     // ── Bioluminescence: only deep ────────────────────────────────────────
     if (bioRef.current) {
-      const bioOpacity = MathUtils.smoothstep(currentDepth, 300, 800) * 0.8
-      bioMat.opacity = MathUtils.lerp(bioMat.opacity, bioOpacity, 3 * delta)
+      const bioOpacity = MathUtils.smoothstep(currentDepth, 250, 700) * 0.8 * (effect?.glowMultiplier ?? 1.0)
+      bioMat.opacity = MathUtils.lerp(bioMat.opacity, Math.min(1.0, bioOpacity), 3 * delta)
       // Gentle pulsing
-      bioMat.size = 0.9 + 0.5 * Math.sin(t * 0.7)
+      bioMat.size = (0.9 + 0.5 * Math.sin(t * 0.7)) * (effect?.glowMultiplier ? 1.5 : 1.0)
+      if (effect?.particleColor) {
+        bioMat.color.lerp(new Color(effect.particleColor), 0.05)
+      }
       // Follow camera
       bioRef.current.position.copy(_camPos)
     }
@@ -260,6 +365,20 @@ export const UnderwaterAtmosphere = React.memo(function UnderwaterAtmosphere() {
       <instancedMesh
         ref={particleRef}
         args={[particleGeo, particleMat, PARTICLE_COUNT]}
+        frustumCulled={false}
+      />
+
+      {/* ── Bloom: jellyfish swarm ─────────────────────────────────────── */}
+      <instancedMesh
+        ref={jellyRef}
+        args={[jellyGeo, jellyMat, JELLYFISH_COUNT]}
+        frustumCulled={false}
+      />
+
+      {/* ── Eclipse: dark veil particles ──────────────────────────────── */}
+      <instancedMesh
+        ref={eclipseRef}
+        args={[eclipseGeo, eclipseMat, ECLIPSE_COUNT]}
         frustumCulled={false}
       />
 
