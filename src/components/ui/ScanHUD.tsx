@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { useFrame } from '@react-three/fiber'
 import { Discovery } from '../../store/usePlayerStore'
 import { getBiomeAt } from '../../engine/procedural/biomeGenerator'
+import { RARITY_CONFIG, Rarity } from '../../engine/procedural/creatureFactory'
+import { usePlayerStore } from '../../store/usePlayerStore'
 import './ScanHUD.css'
 
 // ─── Scan state machine ───────────────────────────────────────────────────────
@@ -28,6 +29,16 @@ interface Props {
   onDismiss: () => void
 }
 
+// Rarity colour map
+const RARITY_BADGE_STYLE: Record<string, { bg: string; text: string; label: string }> = {
+  common:    { bg: 'rgba(144,164,174,0.2)', text: '#90a4ae', label: 'Common' },
+  uncommon:  { bg: 'rgba(102,187,106,0.2)', text: '#66bb6a', label: 'Uncommon' },
+  rare:      { bg: 'rgba(66,165,245,0.2)',  text: '#42a5f5', label: 'Rare' },
+  epic:      { bg: 'rgba(171,71,188,0.2)',  text: '#ce93d8', label: 'Epic' },
+  legendary: { bg: 'rgba(255,195,0,0.2)',   text: '#ffc300', label: 'Legendary' },
+  mythical:  { bg: 'rgba(255,0,110,0.2)',   text: '#ff80ab', label: 'Mythical ✦' },
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 export function ScanHUD({
   scanState, playerName,
@@ -36,9 +47,11 @@ export function ScanHUD({
   const [naming, setNaming]       = useState(false)
   const [customName, setCustomName] = useState('')
   const [named, setNamed]         = useState(false)
+  const [rpGain, setRpGain]       = useState(0)
   const progressRef = useRef(0)
   const scanningRef = useRef(false)
   const frameIdRef  = useRef<number>(0)
+  const addResearchPoints = usePlayerStore(s => s.addResearchPoints)
 
   // Reset naming state whenever a new scan result arrives
   useEffect(() => {
@@ -81,6 +94,9 @@ export function ScanHUD({
         // Build discovery object
         const d = scanState
         const currentDepth = Math.round(Math.abs(d.wy ?? 0))
+        const rarity = d.dna?.rarity ?? 'common'
+        const rpCfg  = RARITY_CONFIG[rarity as Rarity]
+        const rp     = rpCfg?.rpReward ?? 10
         const discovery: Discovery = {
           id:           (d.speciesId ?? '') + '-' + Date.now(),
           speciesId:    d.speciesId ?? 'UNKNOWN',
@@ -94,6 +110,9 @@ export function ScanHUD({
           dna:          d.dna,
           isFirstEver:  Math.random() > 0.7,
         }
+        // Award research points
+        addResearchPoints(rp)
+        setRpGain(rp)
         onScanComplete(discovery)
         return
       }
@@ -153,8 +172,10 @@ export function ScanHUD({
 
   if (scanState.phase === 'result' && scanState.discovery) {
     const d = scanState.discovery
-    const behavior = d.dna?.behavior ?? 'unknown'
+    const behavior   = d.dna?.behavior ?? 'unknown'
     const approxSize = d.dna ? ((d.dna.size * 5).toFixed(1) + 'm') : '?'
+    const rarity     = (d.dna?.rarity ?? 'common') as string
+    const rarityBadge = RARITY_BADGE_STYLE[rarity] ?? RARITY_BADGE_STYLE.common
 
     return (
       <div className="scan-hud scan-result" id="scan-hud-result">
@@ -162,6 +183,18 @@ export function ScanHUD({
           <div className="src-header">
             <span className="src-new text-mono">NEW SPECIES DISCOVERED</span>
             <button className="src-close" onClick={onDismiss} id="btn-scan-result-close">✕</button>
+          </div>
+
+          {/* Rarity badge + RP gain */}
+          <div className="src-rarity-row">
+            <span className="src-rarity-badge" style={{ background: rarityBadge.bg, color: rarityBadge.text, borderColor: rarityBadge.text }}>
+              {rarityBadge.label}
+            </span>
+            {rpGain > 0 && (
+              <span className="src-rp-gain text-mono" style={{ color: '#ffd60a' }}>
+                +{rpGain} RP
+              </span>
+            )}
           </div>
 
           <div className="src-species-id text-mono">{d.speciesId}</div>

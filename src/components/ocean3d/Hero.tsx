@@ -13,6 +13,8 @@ export const heroSpeedRef = { current: 0 }
 export const heroPropWorldPos = { current: new Vector3() }
 // Velocity direction ref for BubbleTrail trail direction
 export const heroVelocityRef  = { current: new Vector3() }
+// World-space submarine center position (for creature AI)
+export const heroSubWorldPos  = { current: new Vector3() }
 
 // ─── Pre-allocated reusables (zero per-frame allocations) ────────────────────
 const _moveDir    = new Vector3()
@@ -95,6 +97,12 @@ export const Hero = React.memo(function Hero() {
       if (e.key.toLowerCase() === 'f') {
         headlights.current = !headlights.current
       }
+      // Sonar ping trigger
+      if (e.key.toLowerCase() === 'r') {
+        import('../../store/useSonarStore').then(({ useSonarStore }) => {
+          useSonarStore.getState().triggerPing(heroSubWorldPos.current)
+        })
+      }
     }
     const up = (e: KeyboardEvent) => keys.current.delete(e.key.toLowerCase())
 
@@ -169,8 +177,10 @@ export const Hero = React.memo(function Hero() {
     groupRef.current.position.addScaledVector(velocity.current, dt)
     _subPos.copy(groupRef.current.position)
 
-    // Depth clamp: surface = -10, max depth = -11000
-    _subPos.y = MathUtils.clamp(_subPos.y, -11000, -10)
+    // Depth clamp based on pressure hull equipment level (Level 0 = 8000m, Level 1+ = 11000m)
+    const eqPressure = usePlayerStore.getState().equipmentLevel?.pressure ?? 0
+    const maxAllowedDepth = eqPressure >= 1 ? -11000 : -8000
+    _subPos.y = MathUtils.clamp(_subPos.y, maxAllowedDepth, -10)
     groupRef.current.position.y = _subPos.y
 
     // ── 6. Rotation (yaw + pitch + bank) ─────────────────────────────────
@@ -188,17 +198,23 @@ export const Hero = React.memo(function Hero() {
     heroSpeedRef.current = speedFrac
     heroVelocityRef.current.copy(velocity.current)
 
+    // World-space submarine center position (for creature AI awareness)
+    heroSubWorldPos.current.copy(_subPos)
+    ;(window as any).__heroSubPos = heroSubWorldPos.current
+
     // World-space propeller position for BubbleTrail
     _propWorld.set(0, 0, 4.8)
     _propWorld.applyQuaternion(groupRef.current.quaternion)
     _propWorld.add(_subPos)
     heroPropWorldPos.current.copy(_propWorld)
 
-    // ── 8. Headlights ────────────────────────────────────────────────────
+    // ── 8. Headlights (scales with equipment level) ──────────────────────
+    const eqLights = usePlayerStore.getState().equipmentLevel?.lights ?? 0
+    const lightMult = eqLights === 1 ? 2.0 : eqLights >= 2 ? 3.5 : 1.0
     const hlIntensity = headlights.current ? 1 : 0
-    if (spot1Ref.current) spot1Ref.current.intensity  = MathUtils.lerp(spot1Ref.current.intensity, hlIntensity * 600, 8 * dt)
-    if (spot2Ref.current) spot2Ref.current.intensity  = MathUtils.lerp(spot2Ref.current.intensity, hlIntensity * 900, 8 * dt)
-    if (headlightGlowRef.current) headlightGlowRef.current.intensity = MathUtils.lerp(headlightGlowRef.current.intensity, hlIntensity * 40, 8 * dt)
+    if (spot1Ref.current) spot1Ref.current.intensity  = MathUtils.lerp(spot1Ref.current.intensity, hlIntensity * 600 * lightMult, 8 * dt)
+    if (spot2Ref.current) spot2Ref.current.intensity  = MathUtils.lerp(spot2Ref.current.intensity, hlIntensity * 900 * lightMult, 8 * dt)
+    if (headlightGlowRef.current) headlightGlowRef.current.intensity = MathUtils.lerp(headlightGlowRef.current.intensity, hlIntensity * 40 * lightMult, 8 * dt)
 
     // ── 9. Camera ─────────────────────────────────────────────────────────
     if (camMode.current === 'third') {

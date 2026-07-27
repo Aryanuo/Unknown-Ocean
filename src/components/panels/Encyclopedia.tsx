@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { motion } from 'framer-motion'
-import { generateCreatureDNA, generateSpeciesId, generateSpeciesName } from '../../engine/procedural/creatureFactory'
+import { generateCreatureDNA, generateSpeciesId, generateSpeciesName, RARITY_CONFIG } from '../../engine/procedural/creatureFactory'
 import { usePlayerStore } from '../../store/usePlayerStore'
 import './Panel.css'
 
@@ -97,20 +97,27 @@ export function Encyclopedia({ onClose }: Props) {
 
         <div className="encyclopedia-layout">
           <div className="encyclopedia-list">
-            {filtered.slice(0, 100).map(s => (
-              <button
-                key={s.id}
-                className={`encyclopedia-item ${selected?.id === s.id ? 'selected' : ''}`}
-                onClick={() => setSelected(s)}
-                id={`species-${s.id}`}
-              >
-                <div className="ei-swatch" style={{ background: s.dna.primaryColor }} />
-                <div className="ei-info">
-                  <div className="ei-name">{s.name}</div>
-                  <div className="ei-meta text-mono">{s.id} · {s.biome} · {s.depth}m</div>
-                </div>
-              </button>
-            ))}
+            {filtered.slice(0, 100).map(s => {
+              const rarity = s.dna?.rarity ?? 'common'
+              const rarityColor = RARITY_CONFIG[rarity as keyof typeof RARITY_CONFIG]?.color ?? '#90a4ae'
+              return (
+                <button
+                  key={s.id}
+                  className={`encyclopedia-item ${selected?.id === s.id ? 'selected' : ''}`}
+                  onClick={() => setSelected(s)}
+                  id={`species-${s.id}`}
+                >
+                  <div className="ei-swatch" style={{ background: s.dna.primaryColor, boxShadow: `0 0 6px ${s.dna.primaryColor}88` }} />
+                  <div className="ei-info">
+                    <div className="ei-name">{s.name}</div>
+                    <div className="ei-meta text-mono">{s.id} · {s.biome} · {s.depth}m</div>
+                  </div>
+                  <span className="ei-rarity text-mono" style={{ color: rarityColor, borderColor: rarityColor + '44' }}>
+                    {rarity}
+                  </span>
+                </button>
+              )
+            })}
             {filtered.length === 0 && (
               <div className="panel-empty">
                 <div className="panel-empty-icon">🔍</div>

@@ -9,11 +9,13 @@ import { useWorldStore } from '../store/useWorldStore'
 import { getBiomeAt, BIOMES, BiomeType } from '../engine/procedural/biomeGenerator'
 import { HUD } from '../components/ui/HUD'
 import { DailyEventBanner } from '../components/ui/DailyEventBanner'
+import { SonarMinimap } from '../components/ui/SonarMinimap'
 import { ScanHUD, ScanState } from '../components/ui/ScanHUD'
 import { ResearchLog } from '../components/panels/ResearchLog'
 import { Encyclopedia } from '../components/panels/Encyclopedia'
 import { PhotoMode } from '../components/panels/PhotoMode'
 import { CommunityStats } from '../components/panels/CommunityStats'
+import { MissionBoard } from '../components/panels/MissionBoard'
 import { Hero } from '../components/ocean3d/Hero'
 import { BubbleTrail } from '../components/ocean3d/BubbleTrail'
 import { Terrain3D } from '../components/ocean3d/Terrain3D'
@@ -105,7 +107,7 @@ export default function OceanScene() {
   const { setCurrentBiome, dailyEvent }  = useWorldStore()
 
   const [currentBiome, setLocalBiome]    = useState<BiomeType>('coral')
-  const [openPanel, setOpenPanel]        = useState<'log' | 'encyclopedia' | 'photo' | 'stats' | null>(null)
+  const [openPanel, setOpenPanel]        = useState<'log' | 'encyclopedia' | 'photo' | 'stats' | 'missions' | null>(null)
   const [photoMode, setPhotoMode]        = useState(false)
 
   // Scan state managed at the top level so ScanHUD can read it
@@ -225,10 +227,12 @@ export default function OceanScene() {
             onOpenLog={() => setOpenPanel('log')}
             onOpenEncyclopedia={() => setOpenPanel('encyclopedia')}
             onOpenStats={() => setOpenPanel('stats')}
+            onOpenMissions={() => setOpenPanel('missions')}
             onPhotoMode={() => setPhotoMode(true)}
             currentBiome={currentBiome}
           />
           <DailyEventBanner event={dailyEvent} />
+          <SonarMinimap />
         </>
       )}
 
@@ -258,6 +262,7 @@ export default function OceanScene() {
       {openPanel === 'log'          && <ResearchLog    onClose={() => setOpenPanel(null)} />}
       {openPanel === 'encyclopedia' && <Encyclopedia   onClose={() => setOpenPanel(null)} />}
       {openPanel === 'stats'        && <CommunityStats onClose={() => setOpenPanel(null)} />}
+      {openPanel === 'missions'     && <MissionBoard   onClose={() => setOpenPanel(null)} />}
     </div>
   )
 }

@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+## Future Roadmap
+IMPLEMENTATION_PLAN.md
+PROJECT_MEMORY.md

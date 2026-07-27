@@ -9,12 +9,13 @@ interface HUDProps {
   onOpenLog: () => void
   onOpenEncyclopedia: () => void
   onOpenStats: () => void
+  onOpenMissions: () => void
   onPhotoMode: () => void
   currentBiome: BiomeType
 }
 
-export function HUD({ onOpenLog, onOpenEncyclopedia, onOpenStats, onPhotoMode, currentBiome }: HUDProps) {
-  const { coords, depth, discoveries } = usePlayerStore()
+export function HUD({ onOpenLog, onOpenEncyclopedia, onOpenStats, onOpenMissions, onPhotoMode, currentBiome }: HUDProps) {
+  const { coords, depth, discoveries, researchPoints } = usePlayerStore()
   const biomeConf = BIOMES[currentBiome] || BIOMES.open
   const [prevBiome, setPrevBiome] = useState(currentBiome)
   const [biomeFlash, setBiomeFlash] = useState(false)
@@ -81,6 +82,12 @@ export function HUD({ onOpenLog, onOpenEncyclopedia, onOpenStats, onPhotoMode, c
             {discoveries.length}
           </span>
         </div>
+        <div className="hud-env-row">
+          <span className="hud-env-label text-mono">RP</span>
+          <span className="hud-env-val text-mono" style={{ color: '#ffd60a' }}>
+            {researchPoints.toLocaleString()}
+          </span>
+        </div>
 
         {/* Speed gauge */}
         <div className="hud-env-row" style={{ marginTop: '6px', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '6px' }}>
@@ -111,6 +118,10 @@ export function HUD({ onOpenLog, onOpenEncyclopedia, onOpenStats, onPhotoMode, c
           <span className="hud-nav-icon">📋</span>
           <span className="hud-nav-label">Log</span>
         </button>
+        <button className="hud-nav-btn" onClick={onOpenMissions} id="btn-missions" title="Daily Missions">
+          <span className="hud-nav-icon">🎯</span>
+          <span className="hud-nav-label">Missions</span>
+        </button>
         <button className="hud-nav-btn" onClick={onOpenEncyclopedia} id="btn-encyclopedia" title="Encyclopedia">
           <span className="hud-nav-icon">📖</span>
           <span className="hud-nav-label">Species</span>
@@ -133,6 +144,7 @@ export function HUD({ onOpenLog, onOpenEncyclopedia, onOpenStats, onPhotoMode, c
         <div className="hud-controls-row"><kbd>Shift</kbd><span>Boost</span></div>
         <div className="hud-controls-row"><kbd>V</kbd><span>Camera View</span></div>
         <div className="hud-controls-row"><kbd>F</kbd><span>Headlights</span></div>
+        <div className="hud-controls-row"><kbd>R</kbd><span>Sonar Ping</span></div>
       </div>
     </div>
   )

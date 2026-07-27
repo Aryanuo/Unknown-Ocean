@@ -4,7 +4,8 @@ import { Vector3 } from 'three'
 import { usePlayerStore, Discovery } from '../../store/usePlayerStore'
 import { getBiomeAt } from '../../engine/procedural/biomeGenerator'
 import { getCreatureSeed, generateCreatureDNA, generateSpeciesId, generateSpeciesName } from '../../engine/procedural/creatureFactory'
-import { Creature3D } from './Creature3D'
+import { Creature3D, registerSubPos } from './Creature3D'
+import { heroSubWorldPos } from './Hero'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface InstancedCreature {
@@ -49,7 +50,9 @@ function generateChunkCreatures(cx: number, cy: number, cz: number): InstancedCr
     const wx        = chunkX + ((seed * 7  + i * 137) % CHUNK_SIZE)
     const wy        = Math.min(-10, chunkY + ((seed * 11 + i * 73) % CHUNK_SIZE))
     const wz        = chunkZ + ((seed * 13 + i * 97)  % CHUNK_SIZE)
-    const dna       = generateCreatureDNA(seed)
+    const depth     = Math.abs(wy)
+    const biome     = getBiomeAt(wx, wz, depth)
+    const dna       = generateCreatureDNA(seed, biome)
     const speciesId = generateSpeciesId(seed)
     const name      = generateSpeciesName(dna, seed)
     const id        = `${chunkKey(cx, cy, cz)}_${i}`
@@ -144,6 +147,8 @@ export function CreatureManager({ onScanCreature, onDiscovery }: Props) {
   // ── Per-frame logic ────────────────────────────────────────────────────────
   useFrame((state) => {
     const now = state.clock.elapsedTime
+    // Register submarine position for creature AI (every frame is fine — it's just a ref copy)
+    registerSubPos(heroSubWorldPos.current)
     // Check every 1.5 seconds – enough to preload chunks before they're needed
     if (now - lastCheckTime.current < 1.5) return
     lastCheckTime.current = now
