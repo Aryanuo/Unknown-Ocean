@@ -16,6 +16,9 @@ export interface BiomeConfig {
   lightColor: string
   lightIntensity: number
   particleColor: string
+  terrainColorBase: string
+  terrainColorPeak: string
+  terrainRoughness: number
   depth: [number, number]
   rarity: number
   description: string
@@ -30,6 +33,9 @@ export const BIOMES: Record<BiomeType, BiomeConfig> = {
     lightColor: '#48cae4',
     lightIntensity: 1.2,
     particleColor: '#90e0ef',
+    terrainColorBase: '#1a5276',
+    terrainColorPeak: '#e59866',
+    terrainRoughness: 0.85,
     depth: [0, 200],
     rarity: 1,
     description: 'Vibrant reefs teeming with life. Schools of fish weave through ancient coral formations.',
@@ -42,6 +48,9 @@ export const BIOMES: Record<BiomeType, BiomeConfig> = {
     lightColor: '#52b788',
     lightIntensity: 0.9,
     particleColor: '#74c69d',
+    terrainColorBase: '#0b251a',
+    terrainColorPeak: '#40916c',
+    terrainRoughness: 0.90,
     depth: [50, 300],
     rarity: 1,
     description: 'Dense underwater forests where shadows hide ancient creatures.',
@@ -54,6 +63,9 @@ export const BIOMES: Record<BiomeType, BiomeConfig> = {
     lightColor: '#c77dff',
     lightIntensity: 1.5,
     particleColor: '#e0aaff',
+    terrainColorBase: '#1a0933',
+    terrainColorPeak: '#9d4edd',
+    terrainRoughness: 0.60,
     depth: [200, 600],
     rarity: 2,
     description: 'Caverns of glowing minerals that pulse with mysterious bioluminescent light.',
@@ -66,6 +78,9 @@ export const BIOMES: Record<BiomeType, BiomeConfig> = {
     lightColor: '#023e8a',
     lightIntensity: 0.3,
     particleColor: '#0077b6',
+    terrainColorBase: '#010912',
+    terrainColorPeak: '#0e2a47',
+    terrainRoughness: 0.95,
     depth: [1000, 11000],
     rarity: 3,
     description: 'Near total darkness. Massive unknown creatures patrol the crushing depths.',
@@ -78,6 +93,9 @@ export const BIOMES: Record<BiomeType, BiomeConfig> = {
     lightColor: '#e0f7fa',
     lightIntensity: 0.8,
     particleColor: '#caf0f8',
+    terrainColorBase: '#2c5d75',
+    terrainColorPeak: '#d8f3dc',
+    terrainRoughness: 0.75,
     depth: [0, 400],
     rarity: 2,
     description: 'Arctic waters beneath sheets of ice. Only the hardiest species survive here.',
@@ -90,6 +108,9 @@ export const BIOMES: Record<BiomeType, BiomeConfig> = {
     lightColor: '#ff4d00',
     lightIntensity: 1.1,
     particleColor: '#ff6b35',
+    terrainColorBase: '#1c0505',
+    terrainColorPeak: '#e63946',
+    terrainRoughness: 0.98,
     depth: [500, 3000],
     rarity: 3,
     description: 'Volcanic vents heat the water to extreme temperatures, hosting unique extremophile life.',
@@ -102,6 +123,9 @@ export const BIOMES: Record<BiomeType, BiomeConfig> = {
     lightColor: '#ffd60a',
     lightIntensity: 0.7,
     particleColor: '#ffc300',
+    terrainColorBase: '#121224',
+    terrainColorPeak: '#8d99ae',
+    terrainRoughness: 0.88,
     depth: [100, 800],
     rarity: 4,
     description: 'Sunken temples of a lost civilization. Fragments of unknown technology lay scattered.',
@@ -114,6 +138,9 @@ export const BIOMES: Record<BiomeType, BiomeConfig> = {
     lightColor: '#0096c7',
     lightIntensity: 1.0,
     particleColor: '#48cae4',
+    terrainColorBase: '#022b5c',
+    terrainColorPeak: '#0077b6',
+    terrainRoughness: 0.90,
     depth: [0, 500],
     rarity: 1,
     description: 'Endless water in every direction. The silence itself is the experience.',

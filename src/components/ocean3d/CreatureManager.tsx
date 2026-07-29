@@ -7,6 +7,7 @@ import { getBiomeAt } from '../../engine/procedural/biomeGenerator'
 import { getCreatureSeed, generateCreatureDNA, generateSpeciesId, generateSpeciesName } from '../../engine/procedural/creatureFactory'
 import { Creature3D, registerSubPos } from './Creature3D'
 import { heroSubWorldPos } from './Hero'
+import { generationProfiler } from '../../engine/performance/generationProfiler'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface InstancedCreature {
@@ -17,7 +18,8 @@ interface InstancedCreature {
   wx: number
   wy: number
   wz: number
-  scanned: boolean    // true after player has scanned this instance
+  scanned: boolean
+  spawnTime: number   // elapsed time at spawn — used for fade-in
 }
 
 interface Props {
@@ -25,23 +27,31 @@ interface Props {
     id: string, speciesId: string, name: string, dna: any,
     wx: number, wy: number, wz: number,
   ) => void
-  onDiscovery: (d: Discovery) => void // kept for legacy compat; no longer auto-fires
+  onDiscovery: (d: Discovery) => void // kept for legacy compat
 }
 
 // ─── Chunk math ───────────────────────────────────────────────────────────────
-const CHUNK_SIZE = 250        // world units per chunk – bigger = fewer updates
-const LOAD_RADIUS = 1         // ±1 chunk in each axis (3×3×3 = 27 chunks max)
-const UNLOAD_DIST = 3         // chunks away before a creature is culled
+const CHUNK_SIZE  = 250        // world units per chunk
+const LOAD_RADIUS = 2          // ±2 chunks horizontally → 5×5 = 25 chunks
+const UNLOAD_DIST = 4          // unload when > 4 chunks away horizontally or outside current depth layer
+const DEPTH_LAYERS = [0] as const // stream only the player's current vertical layer
+
+// Spawn protection radius — don't place fish directly on top of player
+const SPAWN_PROTECT_RADIUS = 30
 
 function chunkKey(cx: number, cy: number, cz: number): string {
   return `${cx}|${cy}|${cz}`
 }
 
-// Module-level ref for event spawn rate multiplier (updated by store subscription)
+// Module-level ref for event spawn rate multiplier
 const spawnRateRef = { current: 1.0 }
 
 // Generate the full list of stable creature IDs+data for one chunk (pure function)
-function generateChunkCreatures(cx: number, cy: number, cz: number): InstancedCreature[] {
+function generateChunkCreatures(
+  cx: number, cy: number, cz: number,
+  playerX: number, playerZ: number,
+): InstancedCreature[] {
+  const startedAt = performance.now()
   const chunkX = cx * CHUNK_SIZE
   const chunkY = cy * CHUNK_SIZE
   const chunkZ = cz * CHUNK_SIZE
@@ -55,6 +65,12 @@ function generateChunkCreatures(cx: number, cy: number, cz: number): InstancedCr
     const wx        = chunkX + ((seed * 7  + i * 137) % CHUNK_SIZE)
     const wy        = Math.min(-10, chunkY + ((seed * 11 + i * 73) % CHUNK_SIZE))
     const wz        = chunkZ + ((seed * 13 + i * 97)  % CHUNK_SIZE)
+
+    // Skip spawning too close to player (anti-pop)
+    const dx = wx - playerX
+    const dz = wz - playerZ
+    if (dx * dx + dz * dz < SPAWN_PROTECT_RADIUS * SPAWN_PROTECT_RADIUS) continue
+
     const depth     = Math.abs(wy)
     const biome     = getBiomeAt(wx, wz, depth)
     const dna       = generateCreatureDNA(seed, biome)
@@ -62,12 +78,13 @@ function generateChunkCreatures(cx: number, cy: number, cz: number): InstancedCr
     const name      = generateSpeciesName(dna, seed)
     const id        = `${chunkKey(cx, cy, cz)}_${i}`
 
-    results.push({ id, speciesId, name, dna, wx, wy, wz, scanned: false })
+    results.push({ id, speciesId, name, dna, wx, wy, wz, scanned: false, spawnTime: -1 })
   }
+  generationProfiler.record('creatures', performance.now() - startedAt, results.length, 1 + results.length, 0)
   return results
 }
 
-// ─────────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
 
 export function CreatureManager({ onScanCreature, onDiscovery }: Props) {
   // Persistent map: id → creature data (never fully replaced)
@@ -81,6 +98,9 @@ export function CreatureManager({ onScanCreature, onDiscovery }: Props) {
   // React render trigger – only incremented when creature set actually changes
   const [renderTick, setRenderTick] = useState(0)
 
+  // Cached creature array — only rebuilt when renderTick changes
+  const cachedCreatures = useRef<InstancedCreature[]>([])
+
   // Sync event spawn rate from world store (no re-renders; just update a ref)
   useEffect(() => {
     const updateRate = () => {
@@ -93,7 +113,6 @@ export function CreatureManager({ onScanCreature, onDiscovery }: Props) {
   }, [])
 
   // Set of speciesIds the player has already scanned
-  // Synced via a non-rendering subscription so discovery changes don't re-render CreatureManager
   const discoveredSpecies = useRef<Set<string>>(
     new Set(usePlayerStore.getState().discoveries.map(d => d.speciesId))
   )
@@ -107,8 +126,8 @@ export function CreatureManager({ onScanCreature, onDiscovery }: Props) {
     return unsub
   }, [])
 
-  // ── Chunk streaming ────────────────────────────────────────────────────────
-  const updateChunks = useCallback((camPos: Vector3) => {
+  // ── Chunk streaming ────────────────────────────────────────────────────
+  const updateChunks = useCallback((camPos: Vector3, elapsedTime: number) => {
     const px = Math.floor(camPos.x / CHUNK_SIZE)
     const py = Math.floor(camPos.y / CHUNK_SIZE)
     const pz = Math.floor(camPos.z / CHUNK_SIZE)
@@ -119,19 +138,22 @@ export function CreatureManager({ onScanCreature, onDiscovery }: Props) {
 
     let changed = false
 
-    // ── Load nearby chunks that aren't already loaded ────────────────────
+    // ── Load nearby chunks ────────────────────────────────────────────
     for (let dx = -LOAD_RADIUS; dx <= LOAD_RADIUS; dx++) {
-      for (let dy = -LOAD_RADIUS; dy <= LOAD_RADIUS; dy++) {
+      for (const dy of DEPTH_LAYERS) {
         for (let dz = -LOAD_RADIUS; dz <= LOAD_RADIUS; dz++) {
           const ck = chunkKey(px + dx, py + dy, pz + dz)
           if (loadedChunks.current.has(ck)) continue
 
           loadedChunks.current.add(ck)
-          const creatures = generateChunkCreatures(px + dx, py + dy, pz + dz)
+          const creatures = generateChunkCreatures(
+            px + dx, py + dy, pz + dz,
+            camPos.x, camPos.z,
+          )
           for (const c of creatures) {
             if (!creatureMap.current.has(c.id)) {
-              // Preserve scanned state if the player already scanned this speciesId
               c.scanned = discoveredSpecies.current.has(c.speciesId)
+              c.spawnTime = elapsedTime  // record spawn time for fade-in
               creatureMap.current.set(c.id, c)
               changed = true
             }
@@ -140,46 +162,54 @@ export function CreatureManager({ onScanCreature, onDiscovery }: Props) {
       }
     }
 
-    // ── Unload distant chunks ─────────────────────────────────────────────
+    const unloadStartedAt = performance.now()
+    let unloadedCreatures = 0
+    // ── Unload distant chunks ─────────────────────────────────────────
     for (const ck of loadedChunks.current) {
       const [cx, cy, cz] = ck.split('|').map(Number)
       const distX = Math.abs(cx - px)
       const distY = Math.abs(cy - py)
       const distZ = Math.abs(cz - pz)
-      if (distX > UNLOAD_DIST || distY > UNLOAD_DIST || distZ > UNLOAD_DIST) {
+      if (distX > UNLOAD_DIST || distY > 0 || distZ > UNLOAD_DIST) {
         loadedChunks.current.delete(ck)
-        // Remove creatures belonging to this chunk
         for (const [id] of creatureMap.current) {
           if (id.startsWith(ck + '_')) {
             creatureMap.current.delete(id)
+            unloadedCreatures++
             changed = true
           }
         }
       }
     }
+    if (unloadedCreatures > 0) {
+      generationProfiler.record('creatures', performance.now() - unloadStartedAt, unloadedCreatures, 0, 0)
+    }
 
-    if (changed) setRenderTick(t => t + 1)
+    if (changed) {
+      cachedCreatures.current = Array.from(creatureMap.current.values())
+      generationProfiler.addCounts('creatures', 0, 1, 1)
+      setRenderTick(t => t + 1)
+    }
   }, []) // eslint-disable-line
 
   // ── Per-frame logic ────────────────────────────────────────────────────────
   useFrame((state) => {
     const now = state.clock.elapsedTime
-    // Register submarine position for creature AI (every frame is fine — it's just a ref copy)
     registerSubPos(heroSubWorldPos.current)
-    // Check every 1.5 seconds – enough to preload chunks before they're needed
+    // Check every 1.5 seconds
     if (now - lastCheckTime.current < 1.5) return
     lastCheckTime.current = now
-    updateChunks(state.camera.position)
+    updateChunks(state.camera.position, now)
   })
 
-  // ── Click-to-scan handler passed down to each creature ────────────────────
+  // ── Click-to-scan handler ─────────────────────────────────────────────────
   const handleCreatureClick = useCallback((c: InstancedCreature) => {
-    if (c.scanned) return   // already scanned, ignore re-click silently
+    if (c.scanned) return
     onScanCreature(c.id, c.speciesId, c.name, c.dna, c.wx, c.wy, c.wz)
   }, [onScanCreature])
 
   // ── Render ─────────────────────────────────────────────────────────────────
-  const creatures = Array.from(creatureMap.current.values())
+  const creatures = cachedCreatures.current
 
   return (
     <>
@@ -192,6 +222,7 @@ export function CreatureManager({ onScanCreature, onDiscovery }: Props) {
           wy={c.wy}
           wz={c.wz}
           scanned={c.scanned || discoveredSpecies.current.has(c.speciesId)}
+          spawnTime={c.spawnTime}
           onClick={() => handleCreatureClick(c)}
         />
       ))}

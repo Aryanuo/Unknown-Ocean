@@ -1279,6 +1279,313 @@
   font-weight: 700;
 }
 
+/* ── CommunityStats — Tab bar ─────────────────────────────── */
 
+.cs-tab-bar {
+  display: flex;
+  gap: 6px;
+  border-bottom: 1px solid var(--ui-border);
+  padding-bottom: 12px;
+  flex-wrap: wrap;
+}
 
+.cs-tab-btn {
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
+  background: rgba(0, 180, 216, 0.05);
+  border: 1px solid rgba(0, 180, 216, 0.15);
+  color: var(--ui-text-dim);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.cs-tab-btn.active,
+.cs-tab-btn:hover {
+  background: rgba(0, 180, 216, 0.18);
+  border-color: var(--ocean-glow);
+  color: var(--ocean-cold);
+}
+
+/* ── Highlights row ──────────────────────────────────────── */
+
+.cs-highlights {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.cs-highlight-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: rgba(0, 180, 216, 0.05);
+  border: 1px solid rgba(0, 180, 216, 0.1);
+  border-radius: 8px;
+}
+
+.cs-highlight-icon { font-size: 1.3rem; }
+
+.cs-highlight-val {
+  font-family: var(--font-mono);
+  font-size: 1rem;
+  color: var(--ocean-glow);
+  line-height: 1.1;
+}
+
+.cs-highlight-label {
+  font-size: 8px;
+  letter-spacing: 0.2em;
+  color: var(--ui-text-dim);
+}
+
+.recent-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cs-rarity-pill {
+  font-size: 8px;
+  letter-spacing: 0.1em;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+/* ── Leaderboard ─────────────────────────────────────────── */
+
+.cs-leaderboard-header {
+  font-size: 9px;
+  letter-spacing: 0.3em;
+  color: var(--ui-text-dim);
+  margin-bottom: 8px;
+  text-align: center;
+}
+
+.cs-leaderboard-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 380px;
+  overflow-y: auto;
+}
+
+.cs-lb-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(0, 180, 216, 0.04);
+  border: 1px solid rgba(0, 180, 216, 0.08);
+  border-radius: 6px;
+  transition: background var(--transition-fast);
+}
+
+.cs-lb-row:hover {
+  background: rgba(0, 180, 216, 0.1);
+}
+
+.cs-lb-top3 {
+  border-color: rgba(255, 195, 0, 0.2);
+  background: rgba(255, 195, 0, 0.04);
+}
+
+.cs-lb-player {
+  border-color: rgba(0, 229, 255, 0.35) !important;
+  background: rgba(0, 229, 255, 0.06) !important;
+  margin-top: 4px;
+}
+
+.cs-lb-badge { font-size: 1.1rem; flex-shrink: 0; }
+
+.cs-lb-rank {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: var(--ui-text-dim);
+  width: 28px;
+  flex-shrink: 0;
+}
+
+.cs-lb-name {
+  flex: 1;
+  font-size: 0.85rem;
+  color: var(--ui-text);
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cs-lb-stats {
+  display: flex;
+  gap: 10px;
+  font-size: 10px;
+  color: var(--ui-text-dim);
+  flex-shrink: 0;
+}
+
+.cs-lb-rp {
+  font-size: 10px;
+  color: #ffc300;
+  flex-shrink: 0;
+  width: 70px;
+  text-align: right;
+}
+
+.cs-lb-note {
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  color: var(--ui-text-dim);
+  text-align: center;
+  margin-top: 8px;
+}
+
+/* ── My Contribution ─────────────────────────────────────── */
+
+.cs-contrib-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 16px;
+  background: rgba(0, 180, 216, 0.06);
+  border: 1px solid rgba(0, 180, 216, 0.15);
+  border-radius: 8px;
+  margin-bottom: 4px;
+}
+
+.cs-contrib-avatar { font-size: 2rem; }
+
+.cs-contrib-name {
+  font-size: 1rem;
+  color: var(--ocean-cold);
+}
+
+.cs-contrib-sub {
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  color: var(--ui-text-dim);
+}
+
+.cs-contrib-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cs-contrib-card {
+  padding: 12px 14px;
+  background: rgba(0, 180, 216, 0.04);
+  border: 1px solid rgba(0, 180, 216, 0.1);
+  border-radius: 8px;
+}
+
+.cs-contrib-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.cs-contrib-icon { font-size: 1rem; }
+
+.cs-contrib-card-label {
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  color: var(--ui-text-dim);
+}
+
+.cs-contrib-nums {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.cs-contrib-player {
+  font-family: var(--font-mono);
+  font-size: 1.4rem;
+  line-height: 1;
+}
+
+.cs-contrib-of {
+  font-size: 10px;
+  color: var(--ui-text-dim);
+}
+
+.cs-contrib-bar-wrap {
+  height: 3px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+
+.cs-contrib-bar-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 1.5s ease;
+}
+
+.cs-contrib-pct {
+  font-size: 9px;
+  letter-spacing: 0.15em;
+  opacity: 0.8;
+}
+
+/* ── Personal Records grid ───────────────────────────────── */
+
+.cs-records-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.cs-record-card {
+  padding: 12px;
+  background: rgba(0, 180, 216, 0.05);
+  border: 1px solid rgba(0, 180, 216, 0.1);
+  border-radius: 8px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.cs-record-icon { font-size: 1.3rem; }
+
+.cs-record-val {
+  font-family: var(--font-mono);
+  font-size: 1.1rem;
+  color: var(--ocean-glow);
+}
+
+.cs-record-label {
+  font-size: 8px;
+  letter-spacing: 0.2em;
+  color: var(--ui-text-dim);
+}
+
+.cs-record-world {
+  font-size: 7px;
+  letter-spacing: 0.1em;
+  color: #ffc300;
+  background: rgba(255, 195, 0, 0.12);
+  padding: 2px 6px;
+  border-radius: 10px;
+}
+
+.cs-contrib-cta {
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  color: var(--ui-text-dim);
+  text-align: center;
+  padding: 8px;
+  border-top: 1px solid var(--ui-border);
+  margin-top: 4px;
+}
 

@@ -69,6 +69,8 @@ const SLEEPING_WAKE_DIST  = 20   // wake if sub within this
 
 const SCAVENGER_SPIRAL_R  = 15   // spiral radius
 
+const FADE_DURATION = 2.0   // seconds for creatures to fade in after spawning
+
 interface CreatureProps {
   dna: CreatureDNA
   wx: number
@@ -76,6 +78,7 @@ interface CreatureProps {
   wz: number
   id: number
   scanned: boolean
+  spawnTime: number   // elapsedTime at spawn; -1 = already opaque
   onClick: () => void
 }
 
@@ -298,7 +301,7 @@ function LeviathanBody({ dna, bodyMat, finMat }: { dna: CreatureDNA; bodyMat: Me
 // ═══════════════════════════════════════════════════════════════════════════════
 // Main Creature3D component
 // ═══════════════════════════════════════════════════════════════════════════════
-export const Creature3D = React.memo(function Creature3D({ dna, wx, wy, wz, id, scanned, onClick }: CreatureProps) {
+export const Creature3D = React.memo(function Creature3D({ dna, wx, wy, wz, id, scanned, spawnTime, onClick }: CreatureProps) {
   const groupRef    = useRef<Group>(null)
   const ringRef     = useRef<Mesh>(null)
   const ringMatRef  = useRef<MeshBasicMaterial>(null)
@@ -413,6 +416,17 @@ export const Creature3D = React.memo(function Creature3D({ dna, wx, wy, wz, id, 
     const t   = state.clock.elapsedTime + timeOffset
     const dt  = Math.min(delta, 0.05)
     const currentPos = groupRef.current.position
+
+    // ── Fade-in: smoothly increase opacity from 0 → 1 over FADE_DURATION ──
+    if (spawnTime >= 0) {
+      const age = state.clock.elapsedTime - spawnTime
+      const fadeOpacity = Math.min(1, age / FADE_DURATION)
+      if (bodyMaterial.opacity !== undefined) {
+        bodyMaterial.opacity    = Math.min(dna.transparency, fadeOpacity)
+        finMaterial.opacity     = Math.min(0.75, fadeOpacity * 0.75)
+        jellyfishMaterial.opacity = Math.min(1, fadeOpacity)
+      }
+    }
 
     // Register in creature registry (every frame, cheap copy)
     registerCreature(id, currentPos, velocity.current, behavior, dna.size, archetype, dna.speed, rarity)

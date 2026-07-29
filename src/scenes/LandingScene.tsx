@@ -1,12 +1,29 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useAppStore } from '../store/useAppStore'
+import { usePlayerStore } from '../store/usePlayerStore'
+import { useWorldStore } from '../store/useWorldStore'
+import { generateDailyMissions, getDaySeed } from '../engine/missions/missionEngine'
 import { motion, AnimatePresence } from 'framer-motion'
 import './LandingScene.css'
 
 export default function LandingScene() {
   const setPhase = useAppStore(s => s.setPhase)
+  const { playerName, setPlayerName, discoveries, researchPoints, depth, photosCapture, dailyMissions, initDailyMissions } = usePlayerStore()
+  const { dailyEvent } = useWorldStore()
+
+  const [inputName, setInputName] = useState(playerName === 'Anonymous Researcher' ? '' : playerName)
+  const [editingName, setEditingName] = useState(playerName === 'Anonymous Researcher')
+
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const animFrameRef = useRef<number>(0)
+
+  // Ensure daily missions are initialized
+  useEffect(() => {
+    initDailyMissions()
+  }, [initDailyMissions])
+
+  // Get daily missions list
+  const missionsPreview = dailyMissions.length > 0 ? dailyMissions : generateDailyMissions(getDaySeed())
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -106,7 +123,6 @@ export default function LandingScene() {
       ctx.moveTo(0, H)
       ctx.lineTo(0, horizonY)
 
-      const waveCount = 6
       for (let wx = 0; wx <= W; wx += 4) {
         const wave =
           Math.sin(wx * 0.012 + t * 1.3) * 6 +
@@ -158,9 +174,22 @@ export default function LandingScene() {
     }
   }, [])
 
+  const handleSaveName = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (inputName.trim()) {
+      setPlayerName(inputName.trim())
+      setEditingName(false)
+    }
+  }
+
   const handleDive = () => {
+    if (editingName && inputName.trim()) {
+      setPlayerName(inputName.trim())
+    }
     setPhase('diving')
   }
+
+  const isReturningPlayer = discoveries.length > 0 || researchPoints > 0 || depth > 0
 
   return (
     <div className="landing-root">
@@ -171,35 +200,136 @@ export default function LandingScene() {
           className="landing-text-block"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ delay: 1.2, duration: 2 }}
+          transition={{ delay: 0.5, duration: 1.5 }}
         >
-          <motion.p
-            className="landing-stat"
-            initial={{ opacity: 0, y: 20 }}
+          <motion.div
+            className="landing-title"
+            initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 1.8, duration: 1.5 }}
+            transition={{ delay: 0.8, duration: 1 }}
           >
-            95% of this ocean has never been explored.
-          </motion.p>
+            <span>EXPEDITION PROTOCOL</span>
+            UNKNOWN OCEAN
+          </motion.div>
 
           <motion.div
             className="landing-divider"
             initial={{ scaleX: 0 }}
             animate={{ scaleX: 1 }}
-            transition={{ delay: 3.2, duration: 1.2 }}
+            transition={{ delay: 1.2, duration: 1 }}
           />
+
+          {/* Name Input / Welcome Prompt */}
+          <motion.div
+            className="landing-onboarding-box"
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 1.5, duration: 1 }}
+          >
+            {editingName ? (
+              <form onSubmit={handleSaveName} className="landing-name-form">
+                <div className="landing-form-label text-mono">WHAT SHALL WE CALL YOU, RESEARCHER?</div>
+                <div className="landing-input-row">
+                  <input
+                    type="text"
+                    value={inputName}
+                    onChange={(e) => setInputName(e.target.value)}
+                    placeholder="Enter Explorer Call-sign..."
+                    className="landing-name-input"
+                    maxLength={24}
+                    autoFocus
+                  />
+                  <button type="submit" className="landing-name-submit text-mono">
+                    CONFIRM
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <div className="landing-welcome-row">
+                <div className="landing-welcome-text">
+                  <span className="landing-welcome-label text-mono">COMMANDER</span>
+                  <span className="landing-researcher-name">{playerName}</span>
+                </div>
+                <button
+                  className="landing-edit-name-btn text-mono"
+                  onClick={() => setEditingName(true)}
+                  title="Change Call-sign"
+                >
+                  ✎ EDIT
+                </button>
+              </div>
+            )}
+          </motion.div>
+
+          {/* Returning Player Career Stats */}
+          {isReturningPlayer && (
+            <motion.div
+              className="landing-stats-bar"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 1.8, duration: 1 }}
+            >
+              <div className="landing-stat-item">
+                <span className="landing-stat-val text-mono">{discoveries.length}</span>
+                <span className="landing-stat-lbl text-mono">SPECIES</span>
+              </div>
+              <div className="landing-stat-item">
+                <span className="landing-stat-val text-mono" style={{ color: '#ffd60a' }}>{researchPoints.toLocaleString()}</span>
+                <span className="landing-stat-lbl text-mono">RP</span>
+              </div>
+              <div className="landing-stat-item">
+                <span className="landing-stat-val text-mono">{photosCapture}</span>
+                <span className="landing-stat-lbl text-mono">PHOTOS</span>
+              </div>
+              <div className="landing-stat-item">
+                <span className="landing-stat-val text-mono">{depth.toLocaleString()}m</span>
+                <span className="landing-stat-lbl text-mono">MAX DEPTH</span>
+              </div>
+            </motion.div>
+          )}
+
+          {/* Today's Event Banner Preview */}
+          {dailyEvent && (
+            <motion.div
+              className="landing-event-pill"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 2.1, duration: 0.8 }}
+            >
+              <span className="landing-event-badge text-mono">TODAY'S PHENOMENON</span>
+              <span className="landing-event-title">{dailyEvent.name}</span>
+            </motion.div>
+          )}
+
+          {/* Daily Missions Preview */}
+          <motion.div
+            className="landing-missions-box"
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 2.4, duration: 1 }}
+          >
+            <div className="landing-missions-header text-mono">TODAY'S RESEARCH DIRECTIVES</div>
+            <div className="landing-missions-grid">
+              {missionsPreview.slice(0, 3).map((m) => (
+                <div key={m.id} className="landing-mission-card">
+                  <div className="landing-mission-desc">{m.description}</div>
+                  <div className="landing-mission-reward text-mono">+{m.rewardRP} RP</div>
+                </div>
+              ))}
+            </div>
+          </motion.div>
 
           <motion.button
             className="landing-cta"
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 3.8, duration: 1 }}
+            transition={{ delay: 2.8, duration: 1 }}
             onClick={handleDive}
-            whileHover={{ scale: 1.04 }}
-            whileTap={{ scale: 0.97 }}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.96 }}
             id="begin-expedition-btn"
           >
-            Begin your expedition
+            {isReturningPlayer ? 'RESUME EXPEDITION' : 'BEGIN YOUR EXPEDITION'}
             <span className="landing-cta-arrow">↓</span>
           </motion.button>
         </motion.div>
@@ -208,9 +338,9 @@ export default function LandingScene() {
           className="landing-scroll-hint"
           initial={{ opacity: 0 }}
           animate={{ opacity: [0, 0.6, 0] }}
-          transition={{ delay: 5, duration: 2.5, repeat: Infinity }}
+          transition={{ delay: 3.5, duration: 2.5, repeat: Infinity }}
         >
-          CLICK TO DIVE
+          CLICK BUTTON TO DIVE
         </motion.div>
       </div>
     </div>

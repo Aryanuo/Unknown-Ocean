@@ -11,10 +11,11 @@ interface HUDProps {
   onOpenStats: () => void
   onOpenMissions: () => void
   onPhotoMode: () => void
+  onOpenBase: () => void
   currentBiome: BiomeType
 }
 
-export function HUD({ onOpenLog, onOpenEncyclopedia, onOpenStats, onOpenMissions, onPhotoMode, currentBiome }: HUDProps) {
+export function HUD({ onOpenLog, onOpenEncyclopedia, onOpenStats, onOpenMissions, onPhotoMode, onOpenBase, currentBiome }: HUDProps) {
   const { coords, depth, discoveries, researchPoints } = usePlayerStore()
   const biomeConf = BIOMES[currentBiome] || BIOMES.open
   const [prevBiome, setPrevBiome] = useState(currentBiome)
@@ -134,6 +135,10 @@ export function HUD({ onOpenLog, onOpenEncyclopedia, onOpenStats, onOpenMissions
           <span className="hud-nav-icon">📷</span>
           <span className="hud-nav-label">Photo</span>
         </button>
+        <button className="hud-nav-btn" onClick={onOpenBase} id="btn-base" title="Research Base (B)">
+          <span className="hud-nav-icon">🏠</span>
+          <span className="hud-nav-label">Base</span>
+        </button>
       </nav>
 
       {/* Controls panel */}
@@ -145,6 +150,7 @@ export function HUD({ onOpenLog, onOpenEncyclopedia, onOpenStats, onOpenMissions
         <div className="hud-controls-row"><kbd>V</kbd><span>Camera View</span></div>
         <div className="hud-controls-row"><kbd>F</kbd><span>Headlights</span></div>
         <div className="hud-controls-row"><kbd>R</kbd><span>Sonar Ping</span></div>
+        <div className="hud-controls-row"><kbd>B</kbd><span>Research Base</span></div>
       </div>
     </div>
   )

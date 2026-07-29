@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { Vector3 } from 'three'
 import { findNeighbors } from '../engine/creatureRegistry'
 import { usePlayerStore } from './usePlayerStore'
+import { getNearbyArtefacts } from '../engine/procedural/artefactGenerator'
 
 export interface SonarBlip {
   id: string
@@ -51,7 +52,7 @@ export const useSonarStore = create<SonarState>()((set, get) => ({
     // Query creatures in radius from creature registry
     const neighbors = findNeighbors(subPos, range, -1, 30)
 
-    const newBlips: SonarBlip[] = neighbors.map((n) => {
+    const creatureBlips: SonarBlip[] = neighbors.map((n) => {
       const relX = n.position.x - subPos.x
       const relZ = n.position.z - subPos.z
       const relY = n.position.y - subPos.y
@@ -68,6 +69,28 @@ export const useSonarStore = create<SonarState>()((set, get) => ({
         timestamp: now,
       }
     })
+
+    // Query nearby artefacts if Sonar Lvl >= 1 or for general ping detection
+    const nearbyArtefacts = getNearbyArtefacts(subPos.x, subPos.z, range)
+    const artefactBlips: SonarBlip[] = nearbyArtefacts.map((art) => {
+      const relX = art.position[0] - subPos.x
+      const relZ = art.position[2] - subPos.z
+      const relY = art.position[1] - subPos.y
+      const distance = Math.sqrt(relX * relX + relZ * relZ)
+
+      return {
+        id: `blip_art_${art.instanceId}_${now}`,
+        relX,
+        relZ,
+        relY,
+        distance,
+        rarity: art.def.rarity,
+        scanned: false,
+        timestamp: now,
+      }
+    })
+
+    const newBlips = [...creatureBlips, ...artefactBlips]
 
     set({
       lastPingTime: now,

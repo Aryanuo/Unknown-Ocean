@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { Environment } from '@react-three/drei'
+import { Stats } from '@react-three/drei'
 import { EffectComposer, Bloom, Vignette, ChromaticAberration } from '@react-three/postprocessing'
 import { BlendFunction } from 'postprocessing'
 import { Color, FogExp2, MathUtils, Vector2 } from 'three'
@@ -18,6 +18,7 @@ import { Encyclopedia } from '../components/panels/Encyclopedia'
 import { PhotoMode } from '../components/panels/PhotoMode'
 import { CommunityStats } from '../components/panels/CommunityStats'
 import { MissionBoard } from '../components/panels/MissionBoard'
+import { ResearchBase } from '../components/panels/ResearchBase'
 import { Hero } from '../components/ocean3d/Hero'
 import { BubbleTrail } from '../components/ocean3d/BubbleTrail'
 import { Terrain3D } from '../components/ocean3d/Terrain3D'
@@ -26,23 +27,72 @@ import { MysteryManager } from '../components/ocean3d/MysteryManager'
 import { EventCreature3D } from '../components/ocean3d/EventCreature3D'
 import { EventObject3D, EventObjectType } from '../components/ocean3d/EventObject3D'
 import { UnderwaterAtmosphere } from '../components/ocean3d/UnderwaterAtmosphere'
+import { BiomeDecor } from '../components/ocean3d/BiomeDecor'
+import { ArtefactManager } from '../components/ocean3d/ArtefactManager'
+import { ArtifactPulse3D } from '../components/ocean3d/ArtifactPulse3D'
+import { Waypoint3D } from '../components/ocean3d/Waypoint3D'
+import { ArtifactSignalHUD } from '../components/ui/ArtifactSignalHUD'
+import { GenerationProfilerOverlay } from '../components/ui/GenerationProfilerOverlay'
+import { generationProfiler } from '../engine/performance/generationProfiler'
+import { frameBudgetQueue } from '../engine/performance/frameBudgetQueue'
 import './OceanScene.css'
 
 // ── Pre-allocated colour reusables ────────────────────────────────────────────
 const _fogColor  = new Color()
 const _targetFog = new Color()
 
+// ── Progressive startup ────────────────────────────────────────────────────────
+// Stage changes are driven by animation frames so the first frame contains only
+// the controllable submarine. Expensive systems are mounted in later frames.
+function useProgressiveStartup() {
+  const [stage, setStage] = useState(0)
+
+  useEffect(() => {
+    let frame = 0
+    let raf = 0
+    const advance = () => {
+      frame++
+      if (frame <= 7) setStage(frame)
+      if (frame < 7) raf = requestAnimationFrame(advance)
+    }
+    raf = requestAnimationFrame(advance)
+    return () => cancelAnimationFrame(raf)
+  }, [])
+
+  return stage
+}
+
+function GenerationProfilerHost() {
+  useFrame(() => {
+    generationProfiler.beginFrame()
+    frameBudgetQueue.process()
+    const queueStats = frameBudgetQueue.getStats()
+    generationProfiler.setQueueStats(queueStats.depth, queueStats.completed, queueStats.yielded)
+  }, -100)
+  return null
+}
+
+function ShaderWarmupProbe({ children }: { children: React.ReactNode }) {
+  const mountedAt = performance.now()
+  useEffect(() => {
+    generationProfiler.record('shaders', performance.now() - mountedAt, 1, 0, 1)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  return <>{children}</>
+}
+
 // ── Environment scene with smooth fog transitions ─────────────────────────────
 interface EnvSceneProps {
   biome: BiomeType
+  startupStage: number
   onScanCreature: (id: string, speciesId: string, name: string, dna: any, wx: number, wy: number, wz: number) => void
   onDiscovery: (d: Discovery) => void
   onInvestigateMystery: (m: MysteryInstance) => void
   discoveredMysteryIds: Set<string>
   onEventObjectInteract: (rp: number, label: string) => void
+  onArtefactToast: (msg: string) => void
 }
 
-const EnvironmentScene = React.memo(function EnvironmentScene({ biome, onScanCreature, onDiscovery, onInvestigateMystery, discoveredMysteryIds, onEventObjectInteract }: EnvSceneProps) {
+const EnvironmentScene = React.memo(function EnvironmentScene({ biome, startupStage, onScanCreature, onDiscovery, onInvestigateMystery, discoveredMysteryIds, onEventObjectInteract, onArtefactToast }: EnvSceneProps) {
   const { scene } = useThree()
   const biomeConf = BIOMES[biome] || BIOMES.open
   const fogRef    = useRef<FogExp2 | null>(null)
@@ -98,16 +148,18 @@ const EnvironmentScene = React.memo(function EnvironmentScene({ biome, onScanCre
         args={[biomeConf.lightColor, '#000814', biomeConf.lightIntensity * 0.15 * lightMult]}
       />
 
-      <Environment preset="city" />
-
+      {/* Stage 0: first frame is immediately controllable. */}
       <Hero />
-      <BubbleTrail />
-      <Terrain3D />
-      <CreatureManager onScanCreature={onScanCreature} onDiscovery={onDiscovery} />
-      <MysteryManager onInvestigate={onInvestigateMystery} discoveredMysteryIds={discoveredMysteryIds} />
+      {startupStage >= 1 && <BubbleTrail />}
+      {startupStage >= 1 && <Terrain3D />}
+      {startupStage >= 2 && <CreatureManager onScanCreature={onScanCreature} onDiscovery={onDiscovery} />}
+      {startupStage >= 3 && <UnderwaterAtmosphere biome={biome} />}
+      {startupStage >= 4 && <MysteryManager onInvestigate={onInvestigateMystery} discoveredMysteryIds={discoveredMysteryIds} />}
+      {startupStage >= 5 && <ArtefactManager onCollectToast={onArtefactToast} />}
+      {startupStage >= 6 && <BiomeDecor biome={biome} />}
 
-      {/* Dynamic Event Mega-Creature (Leviathan / Giant Squid) */}
-      {(worldEffect?.spawnOverride === 'leviathan' || worldEffect?.spawnOverride === 'squid') && (
+      {/* Dynamic event content is intentionally delayed until core control is live. */}
+      {startupStage >= 6 && (worldEffect?.spawnOverride === 'leviathan' || worldEffect?.spawnOverride === 'squid') && (
         <EventCreature3D
           type={worldEffect.spawnOverride}
           eventName={dailyEvent.name}
@@ -115,22 +167,21 @@ const EnvironmentScene = React.memo(function EnvironmentScene({ biome, onScanCre
           onScan={onScanCreature}
         />
       )}
-
-      {/* Dynamic Event World Object (Portal / Crater / Temple) */}
-      {(worldEffect?.spawnOverride === 'portal' || worldEffect?.spawnOverride === 'crater') && (
+      {startupStage >= 6 && (worldEffect?.spawnOverride === 'portal' || worldEffect?.spawnOverride === 'crater') && (
         <EventObject3D
           type={worldEffect.spawnOverride as EventObjectType}
           onInteract={(rp) => onEventObjectInteract(rp, dailyEvent.name)}
         />
       )}
-      {dailyEvent?.type === 'awakening' && (
+      {startupStage >= 6 && dailyEvent?.type === 'awakening' && (
         <EventObject3D
           type="temple"
           onInteract={(rp) => onEventObjectInteract(rp, dailyEvent.name)}
         />
       )}
 
-      <UnderwaterAtmosphere />
+      {startupStage >= 2 && <ArtifactPulse3D />}
+      {startupStage >= 2 && <Waypoint3D />}
     </>
   )
 })
@@ -146,10 +197,15 @@ export default function OceanScene() {
   const playerName              = usePlayerStore(s => s.playerName)
   const discoveredMysteries     = usePlayerStore(s => s.discoveredMysteries)
   const { setCurrentBiome, dailyEvent }  = useWorldStore()
+  const startupStage = useProgressiveStartup()
 
   const [currentBiome, setLocalBiome]    = useState<BiomeType>('coral')
   const [openPanel, setOpenPanel]        = useState<'log' | 'encyclopedia' | 'photo' | 'stats' | 'missions' | null>(null)
   const [photoMode, setPhotoMode]        = useState(false)
+  const [showBase, setShowBase]          = useState(false)
+  // Dev-only diagnostics overlays (backtick = R3F stats, P = generation profiler)
+  const [showStats, setShowStats]        = useState(false)
+  const [showGenerationProfiler, setShowGenerationProfiler] = useState(false)
 
   // Scan state managed at the top level so ScanHUD can read it
   const [scanState, setScanState]        = useState<ScanState>({ phase: 'idle' })
@@ -180,6 +236,29 @@ export default function OceanScene() {
       depthRef.current  = state.depth
     })
     return unsub
+  }, [])
+
+  // ── Development diagnostic toggles ─────────────────────────────────────────
+  useEffect(() => {
+    if (!import.meta.env.DEV) return
+    const handler = (e: KeyboardEvent) => {
+      if (e.repeat) return
+      if (e.key === '`') setShowStats(prev => !prev)
+      if (e.key.toLowerCase() === 'p') setShowGenerationProfiler(prev => !prev)
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [])
+
+  // ── B key toggles Research Base ────────────────────────────────────────────
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.key === 'b' || e.key === 'B') && !e.repeat) {
+        setShowBase(prev => !prev)
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
   }, [])
 
   // ── Stable biome check: interval only started once, reads coords via ref ──
@@ -289,37 +368,48 @@ export default function OceanScene() {
         dpr={[1, 1.5]}
         frameloop="always"
       >
+        <GenerationProfilerHost />
         <EnvironmentScene
           biome={currentBiome}
+          startupStage={startupStage}
           onScanCreature={handleScanCreature}
           onDiscovery={handleDiscovery}
           onInvestigateMystery={handleInvestigateMystery}
           discoveredMysteryIds={discoveredMysteryIds}
           onEventObjectInteract={handleEventObjectInteract}
+          onArtefactToast={(msg) => {
+            setLogToast(msg)
+            setTimeout(() => setLogToast(null), 5000)
+          }}
         />
 
-        {/* ── Post Processing ─────────────────────────────────────────────── */}
-        <EffectComposer multisampling={0} enableNormalPass={false}>
-          <Bloom
-            luminanceThreshold={0.45}
-            luminanceSmoothing={0.85}
-            intensity={1.8}
-            mipmapBlur
-            radius={0.6}
-          />
-          <ChromaticAberration
-            blendFunction={BlendFunction.NORMAL}
-            offset={new Vector2(0.0005, 0.0005)}
-            radialModulation={false}
-            modulationOffset={0}
-          />
-          <Vignette
-            offset={0.25}
-            darkness={0.7}
-            eskil={false}
-          />
-        </EffectComposer>
+        {/* ── Dev FPS Stats (backtick to toggle) ─────────────────────── */}
+        {import.meta.env.DEV && showStats && <Stats />}
+
+        {/* Compile post-processing only after the playable world is visible. */}
+        {startupStage >= 7 && (
+          <ShaderWarmupProbe>
+            <EffectComposer multisampling={0} enableNormalPass={false}>
+              <Bloom
+                luminanceThreshold={0.45}
+                luminanceSmoothing={0.85}
+                intensity={1.8}
+                mipmapBlur
+                radius={0.6}
+              />
+              <ChromaticAberration
+                blendFunction={BlendFunction.NORMAL}
+                offset={new Vector2(0.0005, 0.0005)}
+                radialModulation={false}
+                modulationOffset={0}
+              />
+              <Vignette offset={0.25} darkness={0.7} eskil={false} />
+            </EffectComposer>
+          </ShaderWarmupProbe>
+        )}
       </Canvas>
+
+      {import.meta.env.DEV && showGenerationProfiler && <GenerationProfilerOverlay />}
 
       {/* ── Cockpit overlay ─────────────────────────────────────────────── */}
       <div className="cockpit-frame" id="cockpit-frame" />
@@ -332,10 +422,12 @@ export default function OceanScene() {
             onOpenStats={() => setOpenPanel('stats')}
             onOpenMissions={() => setOpenPanel('missions')}
             onPhotoMode={() => setPhotoMode(true)}
+            onOpenBase={() => setShowBase(true)}
             currentBiome={currentBiome}
           />
           <DailyEventBanner event={dailyEvent} />
           <SonarMinimap />
+          <ArtifactSignalHUD />
         </>
       )}
 
@@ -366,6 +458,9 @@ export default function OceanScene() {
       {openPanel === 'encyclopedia' && <Encyclopedia   onClose={() => setOpenPanel(null)} />}
       {openPanel === 'stats'        && <CommunityStats onClose={() => setOpenPanel(null)} />}
       {openPanel === 'missions'     && <MissionBoard   onClose={() => setOpenPanel(null)} />}
+
+      {/* Research Base (B key) */}
+      {showBase && <ResearchBase onClose={() => setShowBase(false)} />}
 
       {/* Mystery Investigation HUD */}
       {investigatingMystery && (

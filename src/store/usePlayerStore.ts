@@ -34,6 +34,20 @@ export interface DiscoveredMystery {
   artifactCollected: boolean
 }
 
+export interface CollectedArtefact {
+  instanceId: string
+  artefactId: string
+  name: string
+  type: string
+  rarity: string
+  rpValue: number
+  description: string
+  lore: string
+  timestamp: number
+  depth: number
+  coords: { x: number; y: number }
+}
+
 export interface SavedPhoto {
   id: string
   dataUrl: string
@@ -67,7 +81,18 @@ export interface CreatureDNA {
   archetype?: 'fish' | 'ray' | 'eel' | 'jellyfish' | 'cephalopod' | 'leviathan'
 }
 
-export type EquipmentType = 'sonar' | 'camera' | 'lights' | 'pressure'
+export interface DetectedArtefact {
+  instanceId: string
+  artefactId: string
+  name: string
+  type: string
+  rarity: string
+  position: [number, number, number]
+  timestamp: number
+  collected: boolean
+}
+
+export type EquipmentType = 'sonar' | 'camera' | 'lights' | 'pressure' | 'scanner'
 
 export interface EquipmentUpgrade {
   name: string
@@ -97,6 +122,13 @@ export const EQUIPMENT_UPGRADES: Record<EquipmentType, EquipmentUpgrade[]> = {
     { name: 'Class-A Titanium Hull', description: 'Standard hull rated for up to 8,000m depth.', cost: 0, level: 0, effect: '8,000m Depth Limit' },
     { name: 'Reinforced Graphene Hull', description: 'Allows diving into extreme deep trenches below 8,000m.', cost: 3000, level: 1, effect: 'Unlimited Depth Limit' },
   ],
+  scanner: [
+    { name: 'Basic Artifact Scanner', description: 'Detects common nearby artifacts within 200m.', cost: 0, level: 0, effect: '200m Range (Common)' },
+    { name: 'Resonance Scanner L1', description: 'Increases scan range to 300m and detects uncommon items.', cost: 600, level: 1, effect: '300m Range (Uncommon)' },
+    { name: 'Harmonic Pulse Scanner L2', description: 'Increases range to 450m and detects rare artifacts.', cost: 1500, level: 2, effect: '450m Range (Rare)' },
+    { name: 'Abyssal Relic Suite L3', description: 'Expands range to 600m and detects epic/legendary relics.', cost: 3500, level: 3, effect: '600m Range (Epic/Legendary)' },
+    { name: 'Quantum Relic Tracker L4', description: 'Maximum 800m range, mythical detection, depth display & fast cooldown.', cost: 7000, level: 4, effect: '800m Range (Mythical & Depth)' },
+  ],
 }
 
 export interface PlayerState {
@@ -104,6 +136,7 @@ export interface PlayerState {
   playerName: string
   coords: { x: number; y: number }
   depth: number
+  deepestDive: number
   discoveries: Discovery[]
   discoveredMysteries: DiscoveredMystery[]
   photos: SavedPhoto[]
@@ -113,6 +146,9 @@ export interface PlayerState {
   equipmentLevel: Record<EquipmentType, number>
   dailyMissions: MissionObjective[]
   lastMissionDaySeed: number
+  artefacts: CollectedArtefact[]
+  detectedArtefacts: DetectedArtefact[]
+  activeWaypoint: DetectedArtefact | null
 
   addDiscovery: (d: Discovery) => void
   setCoords: (x: number, y: number) => void
@@ -126,6 +162,10 @@ export interface PlayerState {
   claimMissionReward: (id: string) => boolean
   addDiscoveredMystery: (m: DiscoveredMystery) => void
   addPhoto: (photo: SavedPhoto) => void
+  addArtefact: (a: CollectedArtefact) => void
+  addDetectedArtefact: (da: DetectedArtefact) => void
+  setActiveWaypoint: (wp: DetectedArtefact | null) => void
+  clearActiveWaypoint: () => void
 }
 
 function generatePlayerId(): string {
@@ -148,6 +188,7 @@ export const usePlayerStore = create<PlayerState>()(
       playerName: 'Anonymous Researcher',
       coords: spawn,
       depth: 0,
+      deepestDive: 0,
       discoveries: [],
       totalDistance: 0,
       photosCapture: 0,
@@ -157,11 +198,15 @@ export const usePlayerStore = create<PlayerState>()(
         camera: 0,
         lights: 0,
         pressure: 0,
+        scanner: 0,
       },
       dailyMissions: [],
       lastMissionDaySeed: 0,
       discoveredMysteries: [] as DiscoveredMystery[],
       photos: [] as SavedPhoto[],
+      artefacts: [] as CollectedArtefact[],
+      detectedArtefacts: [] as DetectedArtefact[],
+      activeWaypoint: null as DetectedArtefact | null,
 
       initDailyMissions: () => {
         const todaySeed = getDaySeed()
@@ -195,7 +240,9 @@ export const usePlayerStore = create<PlayerState>()(
       setDepth: (depth) => {
         set((state) => {
           const updatedMissions = checkMissionProgressOnDepth(state.dailyMissions, depth)
-          return { depth, dailyMissions: updatedMissions }
+          // Track deepest dive (depth values are positive meters below surface)
+          const deepestDive = Math.max(state.deepestDive, depth)
+          return { depth, deepestDive, dailyMissions: updatedMissions }
         })
       },
 
@@ -271,6 +318,41 @@ export const usePlayerStore = create<PlayerState>()(
           }
         })
       },
+
+      addArtefact: (a: CollectedArtefact) => {
+        set((state) => {
+          if (state.artefacts.some(item => item.instanceId === a.instanceId)) return state
+          // Also mark as collected in detectedArtefacts list if present
+          const updatedDetected = state.detectedArtefacts.map(da =>
+            da.instanceId === a.instanceId ? { ...da, collected: true } : da
+          )
+          // Clear active waypoint if it was this collected artefact
+          const clearWaypoint = state.activeWaypoint?.instanceId === a.instanceId ? null : state.activeWaypoint
+          return {
+            artefacts: [a, ...state.artefacts],
+            detectedArtefacts: updatedDetected,
+            activeWaypoint: clearWaypoint,
+            researchPoints: state.researchPoints + a.rpValue,
+          }
+        })
+      },
+
+      addDetectedArtefact: (da: DetectedArtefact) => {
+        set((state) => {
+          const exists = state.detectedArtefacts.some(item => item.instanceId === da.instanceId)
+          if (exists) {
+            return {
+              detectedArtefacts: state.detectedArtefacts.map(item =>
+                item.instanceId === da.instanceId ? { ...item, ...da } : item
+              ),
+            }
+          }
+          return { detectedArtefacts: [da, ...state.detectedArtefacts] }
+        })
+      },
+
+      setActiveWaypoint: (wp: DetectedArtefact | null) => set({ activeWaypoint: wp }),
+      clearActiveWaypoint: () => set({ activeWaypoint: null }),
     }),
     { name: 'unknown-ocean-player' }
   )
