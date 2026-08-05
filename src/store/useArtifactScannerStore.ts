@@ -26,9 +26,9 @@ interface ScannerConfig {
 }
 
 const SCANNER_CONFIGS: Record<number, ScannerConfig> = {
-  0: { range: 200, maxRarityRank: 0, cooldownMs: 15000, showDepth: false },
-  1: { range: 300, maxRarityRank: 1, cooldownMs: 14000, showDepth: false },
-  2: { range: 450, maxRarityRank: 2, cooldownMs: 12000, showDepth: false },
+  0: { range: 400, maxRarityRank: 0, cooldownMs: 15000, showDepth: false },
+  1: { range: 450, maxRarityRank: 1, cooldownMs: 14000, showDepth: false },
+  2: { range: 550, maxRarityRank: 2, cooldownMs: 12000, showDepth: false },
   3: { range: 600, maxRarityRank: 4, cooldownMs: 10000, showDepth: false },
   4: { range: 800, maxRarityRank: 5, cooldownMs: 8000,  showDepth: true  },
 }

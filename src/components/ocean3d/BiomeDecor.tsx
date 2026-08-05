@@ -15,7 +15,6 @@
 
 import React, { useRef, useMemo, useEffect } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
-import { useAppStore } from '../../store/useAppStore'
 import {
   InstancedMesh, Object3D, MeshStandardMaterial, MeshBasicMaterial,
   ConeGeometry, CylinderGeometry, BoxGeometry, SphereGeometry,
@@ -118,9 +117,6 @@ interface BiomeDecorProps {
 
 export const BiomeDecor = React.memo(function BiomeDecor({ biome }: BiomeDecorProps) {
   const { camera } = useThree()
-  const startupStage = useAppStore((s) => (s.phase === 'ocean' ? 1 : 0))
-
-  if (startupStage < 6) return null
 
   // ── Shared time ref for shaders ──────────────────────────────────────────
   const kelpMatRef    = useRef<ShaderMaterial | null>(null)

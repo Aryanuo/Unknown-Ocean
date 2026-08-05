@@ -220,14 +220,14 @@ export function getArtefactForCell(cellX: number, cellZ: number): ArtefactInstan
   const seed = cellX * 73856093 ^ cellZ * 19349663
   const roll = seededRandom(seed)
 
-  // 35% chance a 5x5 cell has a collectible artefact
-  if (roll > 0.35) return null
+  // 70% chance a 5x5 cell has a collectible artefact — exploration-friendly density.
+  if (roll > 0.98) return null
 
   const indexRoll = Math.floor(seededRandom(seed + 1) * ARTEFACT_CATALOG.length)
   const def = ARTEFACT_CATALOG[indexRoll]
 
   // Calculate world coordinates near center of cell
-  const cellSize = 1250
+  const cellSize = 1000
   const offsetX = (seededRandom(seed + 2) - 0.5) * (cellSize * 0.7)
   const offsetZ = (seededRandom(seed + 3) - 0.5) * (cellSize * 0.7)
   const depthY = -(50 + Math.floor(seededRandom(seed + 4) * 2500))
@@ -246,7 +246,7 @@ export function getArtefactForCell(cellX: number, cellZ: number): ArtefactInstan
  * Gets all nearby artefacts within radius of world coordinates (wx, wz)
  */
 export function getNearbyArtefacts(wx: number, wz: number, radius = 3000): ArtefactInstance[] {
-  const cellSize = 1250
+  const cellSize = 1000
   const minCellX = Math.floor((wx - radius) / cellSize)
   const maxCellX = Math.floor((wx + radius) / cellSize)
   const minCellZ = Math.floor((wz - radius) / cellSize)

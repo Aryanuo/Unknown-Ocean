@@ -23,13 +23,17 @@ function createSeededNoise(seed: number) {
   return createNoise2D(lcg)
 }
 
-const noise2D = createSeededNoise(9482)
-const detailNoise = createSeededNoise(31415)
+function smoothstep(edge0: number, edge1: number, x: number): number {
+  const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)))
+  return t * t * (3 - 2 * t)
+}
+
+const noiseIsland = createSeededNoise(7777)  // Isolated feature placement
+const noiseShape = createSeededNoise(8888)   // Local feature shape
+const noiseMicro = createSeededNoise(9999)   // Surface detail
+
 const chunkCache = new Map<string, TerrainChunkData>()
 const MAX_CACHED_CHUNKS = 64
-const colorBase = new Color()
-const colorPeak = new Color()
-const sampleColor = new Color()
 
 export function terrainChunkKey(chunkX: number, chunkZ: number) {
   return `${chunkX}|${chunkZ}`
@@ -39,14 +43,36 @@ export function worldToTerrainChunk(worldCoordinate: number) {
   return Math.floor((worldCoordinate + TERRAIN_PATCH_SIZE / 2) / TERRAIN_PATCH_SIZE)
 }
 
+/**
+ * Isolated Feature Model:
+ * No continuous seabed. The floor is set to a "void" depth (-4000m).
+ * IslandNoise creates sparse areas where features emerge.
+ */
 function sampleVertexHeight(worldX: number, worldZ: number): number {
-  const scale = 0.0025
-  let elevation = noise2D(worldX * scale, worldZ * scale)
-    + 0.45 * noise2D(worldX * scale * 2.1, worldZ * scale * 2.1)
-    + 0.20 * detailNoise(worldX * scale * 5.3, worldZ * scale * 5.3)
-  elevation /= 1.65
-  const signed = Math.pow(Math.abs(elevation), 1.6) * Math.sign(elevation)
-  return -220 + signed * 160
+  const scaleIsland = 0.0004
+  const scaleShape = 0.002
+  const scaleMicro = 0.008
+
+  const VOID_DEPTH = -4000
+  
+  // 1. Feature Mask (Sparse isolated islands/formations)
+  const islandN = noiseIsland(worldX * scaleIsland, worldZ * scaleIsland)
+  
+  // Only generate terrain if island noise is above threshold
+  // This creates the "isolated landmark" effect
+  if (islandN < 0.65) return VOID_DEPTH
+
+  // 2. Shape within the island
+  const intensity = (islandN - 0.65) / 0.35
+  const shapeN = noiseShape(worldX * scaleShape, worldZ * scaleShape)
+  const microN = noiseMicro(worldX * scaleMicro, worldZ * scaleMicro)
+  
+  // Feature height is a mix of base elevation and noise
+  // Most features start deep and rise up
+  const baseElevation = -1200 + intensity * 1000
+  const detail = shapeN * 150 + microN * 15
+  
+  return baseElevation + detail
 }
 
 function createChunk(chunkX: number, chunkZ: number): TerrainChunkData {
@@ -56,6 +82,11 @@ function createChunk(chunkX: number, chunkZ: number): TerrainChunkData {
   const chunkWorldX = chunkX * TERRAIN_PATCH_SIZE
   const chunkWorldZ = chunkZ * TERRAIN_PATCH_SIZE
   const stride = TERRAIN_SEGMENTS + 1
+  
+  const colorBase = new Color()
+  const colorPeak = new Color()
+  const sampleColor = new Color()
+
   for (let row = 0; row <= TERRAIN_SEGMENTS; row++) {
     const localZ = (row / TERRAIN_SEGMENTS - 0.5) * TERRAIN_PATCH_SIZE
     for (let column = 0; column <= TERRAIN_SEGMENTS; column++) {
@@ -65,10 +96,33 @@ function createChunk(chunkX: number, chunkZ: number): TerrainChunkData {
       const worldZ = chunkWorldZ + localZ
       const height = sampleVertexHeight(worldX, worldZ)
       heights[index] = height
-      const biome = BIOMES[getBiomeAt(worldX, worldZ, 100)] || BIOMES.open
-      colorBase.set(biome.terrainColorBase)
-      colorPeak.set(biome.terrainColorPeak)
-      sampleColor.lerpColors(colorBase, colorPeak, Math.max(0, Math.min(1, (height + 380) / 160)))
+      
+      if (height <= -3900) {
+        // Void color (invisible/black)
+        colors[index * 3] = 0
+        colors[index * 3 + 1] = 0
+        colors[index * 3 + 2] = 0
+        continue
+      }
+
+      const biomeType = getBiomeAt(worldX, worldZ, Math.abs(height))
+      const biome = BIOMES[biomeType] || BIOMES.open
+      
+      // High-contrast rocky/sandy materials
+      if (biomeType === 'coral' || biomeType === 'open') {
+        colorBase.set("#8b7355") // Dark rock
+        colorPeak.set("#c2a378") // Sandy top
+      } else if (biomeType === 'hydrothermal') {
+        colorBase.set("#1a0a0a") // Obsidian
+        colorPeak.set("#8b0000") // Dried magma
+      } else {
+        colorBase.set(biome.terrainColorBase).multiplyScalar(1.5)
+        colorPeak.set(biome.terrainColorPeak).multiplyScalar(1.5)
+      }
+
+      const ratio = Math.max(0, Math.min(1, (height + 1200) / 800))
+      sampleColor.lerpColors(colorBase, colorPeak, ratio)
+      
       const colorIndex = index * 3
       colors[colorIndex] = sampleColor.r
       colors[colorIndex + 1] = sampleColor.g
@@ -92,7 +146,6 @@ export function getTerrainChunk(chunkX: number, chunkZ: number): TerrainChunkDat
   return chunk
 }
 
-/** Returns triangle-interpolated height from the exact cached grid rendered by Terrain3D. */
 export function getTerrainHeight(worldX: number, worldZ: number): number {
   const chunkX = worldToTerrainChunk(worldX)
   const chunkZ = worldToTerrainChunk(worldZ)

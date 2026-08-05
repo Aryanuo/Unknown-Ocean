@@ -6,7 +6,6 @@ import {
   PointLight,
 } from 'three'
 import { usePlayerStore } from '../../store/usePlayerStore'
-import { getTerrainHeight, TERRAIN_CLEARANCE } from '../../engine/terrain/terrainWorld'
 
 // Shared speed ref so BubbleTrail / HUD can read it without prop drilling
 export const heroSpeedRef = { current: 0 }
@@ -185,14 +184,6 @@ export const Hero = React.memo(function Hero() {
     // ── 5. Position ──────────────────────────────────────────────────────
     groupRef.current.position.addScaledVector(velocity.current, dt)
     _subPos.copy(groupRef.current.position)
-
-    // Terrain collision shares the exact cached height grid used by Terrain3D.
-    // Higher Y values are above the floor; never allow the hull center below clearance.
-    const terrainFloor = getTerrainHeight(_subPos.x, _subPos.z) + TERRAIN_CLEARANCE
-    if (_subPos.y < terrainFloor) {
-      _subPos.y = terrainFloor
-      if (velocity.current.y < 0) velocity.current.y = 0
-    }
 
     // Depth clamp based on pressure hull equipment level (Level 0 = 8000m, Level 1+ = 11000m)
     const eqPressure = usePlayerStore.getState().equipmentLevel?.pressure ?? 0

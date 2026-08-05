@@ -7,7 +7,6 @@ import { getBiomeAt } from '../../engine/procedural/biomeGenerator'
 import { getCreatureSeed, generateCreatureDNA, generateSpeciesId, generateSpeciesName } from '../../engine/procedural/creatureFactory'
 import { Creature3D, registerSubPos } from './Creature3D'
 import { heroSubWorldPos } from './Hero'
-import { generationProfiler } from '../../engine/performance/generationProfiler'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface InstancedCreature {
@@ -32,9 +31,8 @@ interface Props {
 
 // ─── Chunk math ───────────────────────────────────────────────────────────────
 const CHUNK_SIZE  = 250        // world units per chunk
-const LOAD_RADIUS = 2          // ±2 chunks horizontally → 5×5 = 25 chunks
-const UNLOAD_DIST = 4          // unload when > 4 chunks away horizontally or outside current depth layer
-const DEPTH_LAYERS = [0] as const // stream only the player's current vertical layer
+const LOAD_RADIUS = 2          // ±2 chunks in each axis → 5×5×5 = 125 chunks, but practically 5×5 XZ = 25
+const UNLOAD_DIST = 4          // unload when > 4 chunks away
 
 // Spawn protection radius — don't place fish directly on top of player
 const SPAWN_PROTECT_RADIUS = 30
@@ -51,13 +49,13 @@ function generateChunkCreatures(
   cx: number, cy: number, cz: number,
   playerX: number, playerZ: number,
 ): InstancedCreature[] {
-  const startedAt = performance.now()
   const chunkX = cx * CHUNK_SIZE
   const chunkY = cy * CHUNK_SIZE
   const chunkZ = cz * CHUNK_SIZE
 
-  const baseCount = 1 + Math.floor(Math.abs(Math.sin(chunkX * 0.001 + chunkZ * 0.002)) * 3)
-  const count = Math.min(8, Math.floor(baseCount * spawnRateRef.current))
+  // Dense but bounded local population: 5–10 creatures per streamed chunk.
+  const baseCount = 5 + Math.floor(Math.abs(Math.sin(chunkX * 0.001 + chunkZ * 0.002)) * 6)
+  const count = Math.min(12, Math.floor(baseCount * spawnRateRef.current))
   const results: InstancedCreature[] = []
 
   for (let i = 0; i < count; i++) {
@@ -80,7 +78,6 @@ function generateChunkCreatures(
 
     results.push({ id, speciesId, name, dna, wx, wy, wz, scanned: false, spawnTime: -1 })
   }
-  generationProfiler.record('creatures', performance.now() - startedAt, results.length, 1 + results.length, 0)
   return results
 }
 
@@ -93,7 +90,7 @@ export function CreatureManager({ onScanCreature, onDiscovery }: Props) {
   const loadedChunks = useRef<Set<string>>(new Set())
   // Last player chunk position so we don't re-run logic every frame
   const lastPlayerChunk = useRef<{ cx: number; cy: number; cz: number } | null>(null)
-  const lastCheckTime   = useRef(0)
+  const lastCheckTime   = useRef(-1.5)
 
   // React render trigger – only incremented when creature set actually changes
   const [renderTick, setRenderTick] = useState(0)
@@ -140,7 +137,7 @@ export function CreatureManager({ onScanCreature, onDiscovery }: Props) {
 
     // ── Load nearby chunks ────────────────────────────────────────────
     for (let dx = -LOAD_RADIUS; dx <= LOAD_RADIUS; dx++) {
-      for (const dy of DEPTH_LAYERS) {
+      for (let dy = -LOAD_RADIUS; dy <= LOAD_RADIUS; dy++) {
         for (let dz = -LOAD_RADIUS; dz <= LOAD_RADIUS; dz++) {
           const ck = chunkKey(px + dx, py + dy, pz + dz)
           if (loadedChunks.current.has(ck)) continue
@@ -162,32 +159,25 @@ export function CreatureManager({ onScanCreature, onDiscovery }: Props) {
       }
     }
 
-    const unloadStartedAt = performance.now()
-    let unloadedCreatures = 0
     // ── Unload distant chunks ─────────────────────────────────────────
     for (const ck of loadedChunks.current) {
       const [cx, cy, cz] = ck.split('|').map(Number)
       const distX = Math.abs(cx - px)
       const distY = Math.abs(cy - py)
       const distZ = Math.abs(cz - pz)
-      if (distX > UNLOAD_DIST || distY > 0 || distZ > UNLOAD_DIST) {
+      if (distX > UNLOAD_DIST || distY > UNLOAD_DIST || distZ > UNLOAD_DIST) {
         loadedChunks.current.delete(ck)
         for (const [id] of creatureMap.current) {
           if (id.startsWith(ck + '_')) {
             creatureMap.current.delete(id)
-            unloadedCreatures++
             changed = true
           }
         }
       }
     }
-    if (unloadedCreatures > 0) {
-      generationProfiler.record('creatures', performance.now() - unloadStartedAt, unloadedCreatures, 0, 0)
-    }
 
     if (changed) {
       cachedCreatures.current = Array.from(creatureMap.current.values())
-      generationProfiler.addCounts('creatures', 0, 1, 1)
       setRenderTick(t => t + 1)
     }
   }, []) // eslint-disable-line

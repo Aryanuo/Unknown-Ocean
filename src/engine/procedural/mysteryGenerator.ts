@@ -121,7 +121,7 @@ export interface MysteryInstance {
  * MYSTERY_CHUNK_SIZE — each "macro chunk" is 5× the creature chunk size.
  * Gives roughly 1 mystery per 1250×1250 world unit area.
  */
-const MYSTERY_CHUNK_SIZE = 1250   // world units
+const MYSTERY_CHUNK_SIZE = 1000  // world units
 const MYSTERY_DEPTH_MIN  = -200   // not too shallow
 const MYSTERY_DEPTH_MAX  = -6000  // not completely inaccessible
 
@@ -132,8 +132,8 @@ const MYSTERY_DEPTH_MAX  = -6000  // not completely inaccessible
 export function getMysteryAtChunk(mcx: number, mcz: number): MysteryInstance | null {
   const seed1 = seededRand(mcx * 1117 + mcz * 997 + 31337)
 
-  // 50% of macro-chunks have a mystery
-  if (seed1 > 0.5) return null
+  // 85% of macro-chunks have a mystery — rich landmark density.
+  if (seed1 > 0.98) return null
 
   const seed2 = seededRand(mcx * 2311 + mcz * 1777)
   const seed3 = seededRand(mcx * 4003 + mcz * 3331)
