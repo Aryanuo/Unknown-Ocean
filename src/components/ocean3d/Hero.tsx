@@ -29,9 +29,9 @@ const _forward    = new Vector3(0, 0, -1)
 const _propWorld  = new Vector3()
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-const MAX_SPEED        = 55          // significantly faster cruise
-const BOOST_MULT       = 1.75        // Shift multiplier
-const ACCELERATION     = 90          // very responsive
+const MAX_SPEED        = 255          // significantly faster cruise
+const BOOST_MULT       = 3.75        // Shift multiplier
+const ACCELERATION     = 190          // very responsive
 const DAMPING          = 0.84        // per-frame (corrected below)
 const TURN_SPEED       = 2.2         // rad/s – snappier turns
 const PITCH_SPEED      = 1.6
@@ -47,9 +47,12 @@ const CAM3_LOOKAHEAD   = 18
 // Place camera at Z=-6.5 so it's in front of all hull geometry, looking forward
 const CAM1_OFFSET      = new Vector3(0, 0.4, -6.5)
 
-const FOV_BASE         = 62
-const FOV_BOOST        = 16
+const FOV_BASE         = 90
+const FOV_BOOST        = 36
 const STORE_SYNC_DIST  = 6
+// Debug: base RP amount granted when pressing the debug key (P)
+// Change this value to adjust how much RP the key grants.
+const DEBUG_BASE_RP    = 50
 
 export const Hero = React.memo(function Hero() {
   // Only subscribe to stable setter references — never to coords/depth
@@ -104,6 +107,10 @@ export const Hero = React.memo(function Hero() {
         import('../../store/useSonarStore').then(({ useSonarStore }) => {
           useSonarStore.getState().triggerPing(heroSubWorldPos.current)
         })
+      }
+      // Debug: grant base RP (press 'P')
+      if (e.key.toLowerCase() === 'p') {
+        usePlayerStore.getState().addResearchPoints(DEBUG_BASE_RP)
       }
       // Artifact scanner trigger
       if (e.key.toLowerCase() === 'x') {
@@ -199,7 +206,7 @@ export const Hero = React.memo(function Hero() {
 
     // ── 7. Propeller spin ─────────────────────────────────────────────────
     if (propRef.current) {
-      propRef.current.rotation.z += spd * dt * 5.0   // faster spin at speed
+      propRef.current.rotation.z += spd * dt * 15.0   // faster spin at speed
     }
 
     const speedFrac = MathUtils.clamp(spd / MAX_SPEED, 0, 1)

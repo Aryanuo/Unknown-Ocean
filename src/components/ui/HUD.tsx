@@ -33,8 +33,8 @@ export function HUD({ onOpenLog, onOpenEncyclopedia, onOpenStats, onOpenMissions
   // Poll heroSpeedRef at 10fps for the speed gauge
   useEffect(() => {
     const id = setInterval(() => {
-      setSpeedPct(Math.round(heroSpeedRef.current * 100))
-    }, 100)
+      setSpeedPct(Math.round(heroSpeedRef.current * 5000))
+    }, 500)
     return () => clearInterval(id)
   }, [])
 
