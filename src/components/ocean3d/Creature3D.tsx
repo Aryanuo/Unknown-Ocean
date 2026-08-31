@@ -90,7 +90,8 @@ export const Creature3D = React.memo(function Creature3D({ dna, wx, wy, wz, id, 
 
     if (distToCam > 280) { groupRef.current.visible = false; return } else { groupRef.current.visible = true }
 
-    registerCreature(id, currentPos, velocity.current, behavior, dna.size, archetype, dna.speed, rarity)
+    const myWorldRadius = Math.max(3.0, scale * (dna.bodyLength ?? 1.5) * 0.5)
+    registerCreature(id, currentPos, velocity.current, behavior, dna.size, archetype, dna.speed, rarity, myWorldRadius)
     let distToSub = Infinity; if (_subWorldPos) { _toSub.copy(_subWorldPos).sub(currentPos); distToSub = _toSub.length() }
     neighborCheck.current++
     if (neighborCheck.current >= 8) {
@@ -113,6 +114,35 @@ export const Creature3D = React.memo(function Creature3D({ dna, wx, wy, wz, id, 
     if (d > 1) { _desired.normalize().multiplyScalar(dna.speed * 8 * speedMult); _steer.copy(_desired).sub(velocity.current).clampLength(0, dna.speed * dt * 20 * speedMult); velocity.current.add(_steer) }
     const maxV = dna.speed * 10 * speedMult; if (velocity.current.length() > maxV) velocity.current.setLength(maxV)
     velocity.current.multiplyScalar(0.995); groupRef.current.position.addScaledVector(velocity.current, dt)
+
+    // ── Creature <-> Submarine Hard Physical Collision (Creature side) ──────
+    if (_subWorldPos && distToSub > 0.001) {
+      const SUB_RADIUS = 6.0
+      const minDist = SUB_RADIUS + myWorldRadius
+      if (distToSub < minDist) {
+        const overlap = minDist - distToSub
+        _tmp.copy(currentPos).sub(_subWorldPos).normalize()
+        groupRef.current.position.addScaledVector(_tmp, overlap)
+        velocity.current.addScaledVector(_tmp, 30.0)
+      }
+    }
+
+    // ── Creature <-> Creature Hard Physical Collision ────────────────────
+    const nearbyCreatures = findNeighbors(currentPos, 40, id, 8)
+    for (const mate of nearbyCreatures) {
+      const mateRadius = mate.radius || 5.0
+      const minDist = myWorldRadius + mateRadius
+      _sep.copy(currentPos).sub(mate.position)
+      const dSq = _sep.lengthSq()
+      if (dSq < minDist * minDist && dSq > 0.001) {
+        const d = Math.sqrt(dSq)
+        const overlap = minDist - d
+        _sep.divideScalar(d)
+        groupRef.current.position.addScaledVector(_sep, overlap * 0.5)
+        velocity.current.addScaledVector(_sep, overlap * 12.0 * dt)
+      }
+    }
+
     if (groupRef.current.position.y > -10) { groupRef.current.position.y = -10; velocity.current.y = Math.min(velocity.current.y, 0) }
     if (velocity.current.lengthSq() > 0.01) { _lookAt.copy(currentPos).add(velocity.current); groupRef.current.lookAt(_lookAt) }
 

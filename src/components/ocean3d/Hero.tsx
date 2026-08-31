@@ -6,6 +6,7 @@ import {
   PointLight,
 } from 'three'
 import { usePlayerStore } from '../../store/usePlayerStore'
+import { findNeighbors } from '../../engine/creatureRegistry'
 
 // Shared speed ref so BubbleTrail / HUD can read it without prop drilling
 export const heroSpeedRef = { current: 0 }
@@ -23,17 +24,18 @@ const _moveDir    = new Vector3()
 const _idealCamPos = new Vector3()
 const _lookTarget  = new Vector3()
 const _subPos     = new Vector3()
+const _subDiff    = new Vector3()
 const _q          = new Quaternion()
 const _euler      = new Euler()
 const _forward    = new Vector3(0, 0, -1)
 const _propWorld  = new Vector3()
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-const MAX_SPEED        = 55          // significantly faster cruise
-const BOOST_MULT       = 1.75        // Shift multiplier
+const MAX_SPEED        = 100          // significantly faster cruise
+const BOOST_MULT       = 3        // Shift multiplier
 const ACCELERATION     = 90          // very responsive
 const DAMPING          = 0.84        // per-frame (corrected below)
-const TURN_SPEED       = 2.2         // rad/s – snappier turns
+const TURN_SPEED       = 2.5         // rad/s – snappier turns
 const PITCH_SPEED      = 1.6
 const BANK_AMOUNT      = 0.42
 const BANK_SMOOTH      = 7
@@ -190,6 +192,28 @@ export const Hero = React.memo(function Hero() {
     const maxAllowedDepth = eqPressure >= 1 ? -11000 : -8000
     _subPos.y = MathUtils.clamp(_subPos.y, maxAllowedDepth, -10)
     groupRef.current.position.y = _subPos.y
+
+    // ── 5b. Submarine <-> Creature Hard Solid Physical Collision ────────────
+    const SUB_RADIUS = 6.0
+    const nearbyCreatures = findNeighbors(_subPos, 60, -1, 16)
+    for (const creature of nearbyCreatures) {
+      const cRadius = creature.radius || 6.0
+      const minDist = SUB_RADIUS + cRadius
+      _subDiff.copy(_subPos).sub(creature.position)
+      const dist = _subDiff.length()
+      if (dist < minDist && dist > 0.001) {
+        const overlap = minDist - dist
+        _subDiff.normalize()
+        // 100% Solid projection: push sub completely out of creature volume
+        groupRef.current.position.addScaledVector(_subDiff, overlap * 1.0)
+        _subPos.copy(groupRef.current.position)
+        // Hard physical bounce: zero inward velocity & reflect outward
+        const vDotN = velocity.current.dot(_subDiff)
+        if (vDotN < 0) {
+          velocity.current.addScaledVector(_subDiff, -vDotN * 1.8)
+        }
+      }
+    }
 
     // ── 6. Rotation (yaw + pitch + bank) ─────────────────────────────────
     const targetBank = -turnInput * BANK_AMOUNT * Math.min(spd / MAX_SPEED, 1)
@@ -375,8 +399,8 @@ export const Hero = React.memo(function Hero() {
       <pointLight
         ref={headlightGlowRef}
         position={[0, 0, -7]}
-        intensity={40}
-        distance={18}
+        intensity={80}
+        distance={40}
         color="#88ccff"
       />
 

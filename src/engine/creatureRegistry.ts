@@ -19,6 +19,7 @@ export interface CreatureEntry {
   archetype: string   // body archetype
   speed: number       // DNA speed value
   rarity: string      // rarity tier (for sonar blip coloring)
+  radius: number      // actual 3D physical world radius
 }
 
 // The registry itself — module-level singleton
@@ -40,6 +41,7 @@ export function registerCreature(
   archetype: string,
   speed: number,
   rarity: string = 'common',
+  radius: number = 5.0,
 ): void {
   let entry = _registry.get(id)
   if (!entry) {
@@ -52,12 +54,14 @@ export function registerCreature(
       archetype,
       speed,
       rarity,
+      radius,
     }
     _registry.set(id, entry)
   } else {
     entry.position.copy(position)
     entry.velocity.copy(velocity)
     entry.rarity = rarity
+    entry.radius = radius
   }
 }
 
