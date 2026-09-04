@@ -1,9 +1,9 @@
-````markdown
 # 🌊 The Unknown Ocean  [Live](https://theocean-a4074.web.app/)
 
 > **Dive into the unknown. Discover what no one has found.**
 
 ![Ocean](content/image.png) 
+<video src="content/ocean.mp4" width="600" controls></video>
 
 The Unknown Ocean is an immersive browser-based 3D underwater exploration experience built around curiosity, discovery, and procedural exploration.
 
@@ -440,7 +440,7 @@ src/
     ├── useAppStore.ts
     ├── usePlayerStore.ts
     └── useWorldStore.ts
-````
+
 
 ---
 
@@ -609,7 +609,7 @@ Add your project's license here.
 
 **Dive deeper. Explore farther. Discover the unknown.**
 
-````
+
 
 ### One change I'd strongly recommend
 
@@ -617,7 +617,7 @@ For the actual GitHub README, put your **best screenshot immediately underneath 
 
 Something like:
 
-```markdown
+
 <p align="center">
   <img src="docs/screenshots/ocean-1.png" alt="The Unknown Ocean">
 </p>
@@ -625,7 +625,7 @@ Something like:
 <p align="center">
   <b>Dive into the unknown. Discover what no one has found.</b>
 </p>
-````
+
 
 Then add a second screenshot later under a **"The Experience"** or **"Screenshots"** section.
 
