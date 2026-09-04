@@ -599,34 +599,5 @@ It is meant to be explored.
 
 ---
 
-## 📜 License
-
-Add your project's license here.
-
----
-
-## 🌊 The Unknown Ocean
-
-**Dive deeper. Explore farther. Discover the unknown.**
 
 
-
-### One change I'd strongly recommend
-
-For the actual GitHub README, put your **best screenshot immediately underneath the title**, before the feature list. Your screenshots already communicate the visual identity very well, especially the submarine, glowing creatures, sonar UI, and deep-ocean atmosphere.
-
-Something like:
-
-
-<p align="center">
-  <img src="docs/screenshots/ocean-1.png" alt="The Unknown Ocean">
-</p>
-
-<p align="center">
-  <b>Dive into the unknown. Discover what no one has found.</b>
-</p>
-
-
-Then add a second screenshot later under a **"The Experience"** or **"Screenshots"** section.
-
-That will make the repository feel much more like a **professional 3D project showcase** rather than a standard college project README.
