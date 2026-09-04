@@ -1,10 +1,9 @@
 ````markdown
-# 🌊 The Unknown Ocean
+# 🌊 The Unknown Ocean  [Live](https://theocean-a4074.web.app/)
 
 > **Dive into the unknown. Discover what no one has found.**
 
-<video src="https://raw.githubusercontent.com/Aryanvo/Unknown-Ocean/main/content/ocean.mp4" width="600" controls></video>
- 
+![Ocean](content/image.png) 
 
 The Unknown Ocean is an immersive browser-based 3D underwater exploration experience built around curiosity, discovery, and procedural exploration.
 
